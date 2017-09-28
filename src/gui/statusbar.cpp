@@ -26,6 +26,7 @@
  * exception statement from your version.
  */
 
+#include "qrightclickbutton.h"
 #include "statusbar.h"
 
 #include <QApplication>
@@ -69,9 +70,10 @@ StatusBar::StatusBar(QWidget *parent)
                 .arg(tr("No direct connections. This may indicate network configuration problems.")));
     connect(m_connecStatusLblIcon, &QAbstractButton::clicked, this, &StatusBar::connectionButtonClicked);
 
-    m_dlSpeedLbl = new QPushButton(this);
+    m_dlSpeedLbl = new QRightClickButton(this);
     m_dlSpeedLbl->setIcon(QIcon(":/icons/skin/download.png"));
     connect(m_dlSpeedLbl, &QAbstractButton::clicked, this, &StatusBar::capDownloadSpeed);
+    connect(m_dlSpeedLbl, &QRightClickButton::rightClicked, this, &StatusBar::toggleDownloadLimit);
     m_dlSpeedLbl->setFlat(true);
     m_dlSpeedLbl->setFocusPolicy(Qt::NoFocus);
     m_dlSpeedLbl->setCursor(Qt::PointingHandCursor);
@@ -208,10 +210,17 @@ void StatusBar::updateSpeedLabels()
 
     QString speedLbl = Utils::Misc::friendlyUnit(sessionStatus.payloadDownloadRate, true);
     int speedLimit = BitTorrent::Session::instance()->downloadSpeedLimit();
-    if (speedLimit)
+    // this should not be here
+    if (speedLimit && (speedLimit != m_dlLimitTmp))
+        m_dlLimitTmp = speedLimit;
+    if ((speedLimit == 0 && m_dlLimitState)
+        || (speedLimit && m_dlLimitState))
+        speedLbl += " <s>[" + Utils::Misc::friendlyUnit(m_dlLimitTmp, true) + "]</s>";
+    else if (speedLimit)
         speedLbl += " [" + Utils::Misc::friendlyUnit(speedLimit, true) + "]";
     speedLbl += " (" + Utils::Misc::friendlyUnit(sessionStatus.totalPayloadDownload) + ")";
     m_dlSpeedLbl->setText(speedLbl);
+
     speedLimit = BitTorrent::Session::instance()->uploadSpeedLimit();
     speedLbl = Utils::Misc::friendlyUnit(sessionStatus.payloadUploadRate, true);
     if (speedLimit)
@@ -268,4 +277,29 @@ void StatusBar::capUploadSpeed()
         session->setUploadSpeedLimit(newLimit);
         refresh();
     }
+}
+
+void StatusBar::toggleDownloadLimit()
+{
+    BitTorrent::Session *const session = BitTorrent::Session::instance();
+
+    m_dlLimitState = !m_dlLimitState;
+
+    if (m_dlLimitState) {
+        m_dlLimitTmp = session->downloadSpeedLimit();
+        session->setDownloadSpeedLimit(0);
+
+        m_dlSpeedLbl->setStyleSheet("QPushButton {text-align:left;text-decoration:line-through;}");
+        m_dlSpeedLbl->setToolTip(tr("Download rate limit disabled, right click to enable."));
+        m_dlSpeedLbl->setStatusTip(tr("Download rate limit disabled, right click to enable."));
+    }
+    else {
+        session->setDownloadSpeedLimit(m_dlLimitTmp);
+
+        m_dlSpeedLbl->setStyleSheet("QPushButton {text-align:left;}");
+        m_dlSpeedLbl->setToolTip("");
+        m_dlSpeedLbl->setStatusTip("");
+    }
+
+    refresh();
 }

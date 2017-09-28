@@ -33,6 +33,7 @@
 
 class QLabel;
 class QPushButton;
+class QRightClickButton;
 
 namespace BitTorrent
 {
@@ -60,17 +61,20 @@ private slots:
     void updateAltSpeedsBtn(bool alternative);
     void capDownloadSpeed();
     void capUploadSpeed();
+    void toggleDownloadLimit();
 
 private:
     void updateConnectionStatus();
     void updateDHTNodesNumber();
     void updateSpeedLabels();
 
-    QPushButton *m_dlSpeedLbl;
+    QRightClickButton *m_dlSpeedLbl;
     QPushButton *m_upSpeedLbl;
     QLabel *m_DHTLbl;
     QPushButton *m_connecStatusLblIcon;
     QPushButton *m_altSpeedsBtn;
+    bool m_dlLimitState = false;
+    int m_dlLimitTmp;
 };
 
 #endif // STATUSBAR_H
