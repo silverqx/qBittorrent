@@ -59,6 +59,7 @@ class FileLogger;
 
 namespace BitTorrent
 {
+    class TorrentExporter;
     class TorrentHandle;
 }
 

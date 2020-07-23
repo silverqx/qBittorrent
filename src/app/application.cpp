@@ -63,6 +63,7 @@
 
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
+#include "base/bittorrent/torrentexporter.h"
 #include "base/bittorrent/torrenthandle.h"
 #include "base/exceptions.h"
 #include "base/iconprovider.h"
@@ -563,6 +564,7 @@ int Application::exec(const QStringList &params)
 
     try {
         BitTorrent::Session::initInstance();
+        BitTorrent::TorrentExporter::initInstance();
         connect(BitTorrent::Session::instance(), &BitTorrent::Session::torrentFinished, this, &Application::torrentFinished);
         connect(BitTorrent::Session::instance(), &BitTorrent::Session::allTorrentsFinished, this, &Application::allTorrentsFinished, Qt::QueuedConnection);
 
@@ -753,6 +755,7 @@ void Application::cleanup()
 #endif
 
     delete RSS::AutoDownloader::instance();
+    BitTorrent::TorrentExporter::freeInstance();
     delete RSS::Session::instance();
 
     ScanFoldersModel::freeInstance();

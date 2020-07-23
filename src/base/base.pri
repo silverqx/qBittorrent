@@ -22,6 +22,7 @@ HEADERS += \
     $$PWD/bittorrent/speedmonitor.h \
     $$PWD/bittorrent/statistics.h \
     $$PWD/bittorrent/torrentcreatorthread.h \
+    $$PWD/bittorrent/torrentexporter.h \
     $$PWD/bittorrent/torrenthandle.h \
     $$PWD/bittorrent/torrenthandleimpl.h \
     $$PWD/bittorrent/torrentinfo.h \
@@ -102,6 +103,7 @@ SOURCES += \
     $$PWD/bittorrent/speedmonitor.cpp \
     $$PWD/bittorrent/statistics.cpp \
     $$PWD/bittorrent/torrentcreatorthread.cpp \
+    $$PWD/bittorrent/torrentexporter.cpp \
     $$PWD/bittorrent/torrenthandle.cpp \
     $$PWD/bittorrent/torrenthandleimpl.cpp \
     $$PWD/bittorrent/torrentinfo.cpp \

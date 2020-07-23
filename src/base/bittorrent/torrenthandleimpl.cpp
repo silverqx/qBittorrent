@@ -1465,6 +1465,7 @@ void TorrentHandleImpl::handleTorrentResumedAlert(const lt::torrent_resumed_aler
 {
     Q_UNUSED(p);
 
+    qDebug() << "Alert handleTorrentResumedAlert()";
     m_session->handleTorrentResumed(this);
 }
 

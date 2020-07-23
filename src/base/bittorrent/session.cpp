@@ -4219,6 +4219,8 @@ void Session::createTorrentHandle(const lt::torrent_handle &nativeHandle)
     TorrentHandleImpl *const torrent = new TorrentHandleImpl {this, nativeHandle, params};
     m_torrents.insert(torrent->hash(), torrent);
 
+    qDebug() << "Alert handleAddTorrentAlert() : " << torrent->name();
+
     const bool hasMetadata = torrent->hasMetadata();
 
     if (params.restored) {
@@ -4297,6 +4299,7 @@ void Session::handleTorrentRemovedAlert(const lt::torrent_removed_alert *p)
         m_loadedMetadata.erase(loadedMetadataIter);
     }
 
+    qDebug() << "Alert handleTorrentRemovedAlert() : ";
     const auto removingTorrentDataIter = m_removingTorrents.find(infoHash);
     if (removingTorrentDataIter != m_removingTorrents.end()) {
         if (removingTorrentDataIter->deleteOption == Torrent) {
@@ -4311,12 +4314,15 @@ void Session::handleTorrentDeletedAlert(const lt::torrent_deleted_alert *p)
     const InfoHash infoHash {p->info_hash};
     const auto removingTorrentDataIter = m_removingTorrents.find(infoHash);
 
+    qDebug() << "Alert handleTorrentDeletedAlert() : ";
+
     if (removingTorrentDataIter == m_removingTorrents.end())
         return;
 
     Utils::Fs::smartRemoveEmptyFolderTree(removingTorrentDataIter->pathToRemove);
     LogMsg(tr("'%1' was removed from the transfer list and hard disk.", "'xxx.avi' was removed...").arg(removingTorrentDataIter->name));
     m_removingTorrents.erase(removingTorrentDataIter);
+    emit torrentDeleted(infoHash);
 }
 
 void Session::handleTorrentDeleteFailedAlert(const lt::torrent_delete_failed_alert *p)

@@ -49,6 +49,7 @@
 #include "cachestatus.h"
 #include "sessionstatus.h"
 #include "torrentinfo.h"
+#include "infohash.h"
 
 #if ((LIBTORRENT_VERSION_NUM >= 10206) && !defined(Q_OS_WIN))
 #define HAS_HTTPS_TRACKER_VALIDATION
@@ -97,7 +98,7 @@ namespace Net
 
 namespace BitTorrent
 {
-    class InfoHash;
+//    class InfoHash;
     class MagnetUri;
     class TorrentHandle;
     class TorrentHandleImpl;
@@ -494,6 +495,7 @@ namespace BitTorrent
         void tagRemoved(const QString &tag);
         void torrentAboutToBeRemoved(BitTorrent::TorrentHandle *const torrent);
         void torrentAdded(BitTorrent::TorrentHandle *const torrent);
+        void torrentDeleted(BitTorrent::InfoHash infoHash);
         void torrentCategoryChanged(BitTorrent::TorrentHandle *const torrent, const QString &oldCategory);
         void torrentFinished(BitTorrent::TorrentHandle *const torrent);
         void torrentFinishedChecking(BitTorrent::TorrentHandle *const torrent);
