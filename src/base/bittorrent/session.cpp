@@ -4219,7 +4219,7 @@ void Session::createTorrentHandle(const lt::torrent_handle &nativeHandle)
     TorrentHandleImpl *const torrent = new TorrentHandleImpl {this, nativeHandle, params};
     m_torrents.insert(torrent->hash(), torrent);
 
-    qDebug() << "Alert handleAddTorrentAlert() : " << torrent->name();
+    qDebug() << "Alert handleAddTorrentAlert() :" << torrent->name();
 
     const bool hasMetadata = torrent->hasMetadata();
 

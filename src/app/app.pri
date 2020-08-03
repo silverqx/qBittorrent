@@ -5,6 +5,7 @@ HEADERS += \
     $$PWD/applicationinstancemanager.h \
     $$PWD/cmdoptions.h \
     $$PWD/filelogger.h \
+    $$PWD/maineventfilter_win.h \
     $$PWD/qtlocalpeer/qtlocalpeer.h \
     $$PWD/upgrade.h
 
@@ -14,6 +15,7 @@ SOURCES += \
     $$PWD/cmdoptions.cpp \
     $$PWD/filelogger.cpp \
     $$PWD/main.cpp \
+    $$PWD/maineventfilter_win.cpp \
     $$PWD/qtlocalpeer/qtlocalpeer.cpp \
     $$PWD/upgrade.cpp
 

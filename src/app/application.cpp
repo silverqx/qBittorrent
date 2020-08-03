@@ -84,6 +84,9 @@
 #include "base/utils/string.h"
 #include "applicationinstancemanager.h"
 #include "filelogger.h"
+#ifdef Q_OS_WIN32
+#include "maineventfilter_win.h"
+#endif
 
 #ifndef DISABLE_GUI
 #include "gui/addnewtorrentdialog.h"
@@ -564,7 +567,6 @@ int Application::exec(const QStringList &params)
 
     try {
         BitTorrent::Session::initInstance();
-        BitTorrent::TorrentExporter::initInstance();
         connect(BitTorrent::Session::instance(), &BitTorrent::Session::torrentFinished, this, &Application::torrentFinished);
         connect(BitTorrent::Session::instance(), &BitTorrent::Session::allTorrentsFinished, this, &Application::allTorrentsFinished, Qt::QueuedConnection);
 
@@ -629,6 +631,12 @@ int Application::exec(const QStringList &params)
         processParams(m_paramsQueue);
         m_paramsQueue.clear();
     }
+
+#ifdef Q_OS_WIN32
+    BitTorrent::TorrentExporter::initInstance();
+    installNativeEventFilter(new MainEventFilter());
+#endif
+
     return BaseApplication::exec();
 }
 

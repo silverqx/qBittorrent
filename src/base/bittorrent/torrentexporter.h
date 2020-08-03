@@ -22,10 +22,13 @@ namespace BitTorrent
         static void freeInstance();
         static TorrentExporter *instance();
 
+        void setQMediaHwnd(const HWND hwnd);
+
     private slots:
         void handleTorrentAdded(BitTorrent::TorrentHandle *const torrent);
         void handleTorrentDeleted(BitTorrent::InfoHash infoHash);
         void commitTorrentsTimerTimeout();
+        void handleTorrentsUpdated(const QVector<BitTorrent::TorrentHandle *> &torrents);
 
     private:
         void connectToDb() const;
@@ -34,9 +37,11 @@ namespace BitTorrent
         void removeDuplicitTorrents();
         void insertPreviewableFilesToDb() const;
         QHash<quint64, TorrentHandle *> selectTorrentsByHashes(const QList<InfoHash> hashes) const;
+        void updateTorrentsInDb(const QVector<BitTorrent::TorrentHandle *> &torrents) const;
 
         QTimer *m_dbCommitTimer;
         QHash<InfoHash, TorrentHandle *> *m_torrentsToCommit;
+        HWND m_qMediaHwnd = nullptr;
 
         static TorrentExporter *m_instance;
     };
