@@ -7,7 +7,6 @@
 
 namespace BitTorrent
 {
-//    class InfoHash;
     class TorrentHandle;
 
     class TorrentExporter final : public QObject

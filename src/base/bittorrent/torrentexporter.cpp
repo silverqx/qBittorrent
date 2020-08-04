@@ -283,12 +283,12 @@ void TorrentExporter::insertTorrentsToDb() const
     QString torrentsBindings = "";
     int i = 0;
     while (i < m_torrentsToCommit->size()) {
-        torrentsBindings += "(?, ?, ?, ?, ?), ";
+        torrentsBindings += "(?, ?, ?, ?, ?, ?, ?), ";
         ++i;
     }
     torrentsBindings.chop(2);
     const QString torrentsQueryString =
-        QString("INSERT INTO torrents (name, size, progress, added_on, hash) VALUES %1")
+        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, hash) VALUES %1")
             .arg(torrentsBindings);
 
     QSqlQuery torrentsQuery;
@@ -304,8 +304,10 @@ void TorrentExporter::insertTorrentsToDb() const
 #endif
 
         torrentsQuery.addBindValue(torrent->name());
-        torrentsQuery.addBindValue(torrent->totalSize());
         torrentsQuery.addBindValue(progressString(torrent->progress()));
+        torrentsQuery.addBindValue(torrent->eta());
+        torrentsQuery.addBindValue(torrent->totalSize());
+        torrentsQuery.addBindValue(torrent->incompletedSize());
         torrentsQuery.addBindValue(torrent->addedTime());
         torrentsQuery.addBindValue(QString(torrent->hash()));
 
@@ -479,14 +481,15 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
     QString torrentsBindings = "";
     int i = 0;
     while (i < torrents.size()) {
-        torrentsBindings += "(?, ?, ?, ?, ?), ";
+        torrentsBindings += "(?, ?, ?, ?, ?, ?, ?), ";
         ++i;
     }
     torrentsBindings.chop(2);
     const QString torrentsQueryString =
-        QString("INSERT INTO torrents (name, size, progress, added_on, hash) VALUES %1 "
-                "ON DUPLICATE KEY UPDATE name=VALUES(name), size=VALUES(size), "
-                "progress=VALUES(progress), added_on=VALUES(added_on), hash=VALUES(hash)")
+        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, hash) VALUES %1 "
+                "ON DUPLICATE KEY UPDATE name=VALUES(name), progress=VALUES(progress), eta=VALUES(eta), "
+                "size=VALUES(size), remaining=VALUES(remaining), added_on=VALUES(added_on), "
+                "hash=VALUES(hash)")
             .arg(torrentsBindings);
 
     QSqlQuery torrentsQuery;
@@ -502,8 +505,10 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
 #endif
 
         torrentsQuery.addBindValue(torrent->name());
-        torrentsQuery.addBindValue(torrent->totalSize());
         torrentsQuery.addBindValue(progressString(torrent->progress()));
+        torrentsQuery.addBindValue(torrent->eta());
+        torrentsQuery.addBindValue(torrent->totalSize());
+        torrentsQuery.addBindValue(torrent->incompletedSize());
         torrentsQuery.addBindValue(torrent->addedTime());
         torrentsQuery.addBindValue(QString(torrent->hash()));
 
