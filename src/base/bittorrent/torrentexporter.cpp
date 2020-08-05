@@ -226,7 +226,8 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     // Multi update of torrents
     updateTorrentsInDb(previewableTorrents);
 
-    if (m_qMediaHwnd == nullptr)
+    // Don't send message updates about torrents changed, when the qMedia is not in foreground
+    if (m_qMediaHwnd == nullptr || m_qMediaWindowActive == false)
         return;
 
     // Serialize torrent hashes for WM_COPYDATA ( std::string is perfect for this 😂 )

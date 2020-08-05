@@ -22,6 +22,7 @@ namespace BitTorrent
         static TorrentExporter *instance();
 
         void setQMediaHwnd(const HWND hwnd);
+        inline void setQMediaWindowActive(const bool active) { m_qMediaWindowActive = active; }
 
     private slots:
         void handleTorrentAdded(BitTorrent::TorrentHandle *const torrent);
@@ -41,6 +42,7 @@ namespace BitTorrent
         QTimer *m_dbCommitTimer;
         QHash<InfoHash, TorrentHandle *> *m_torrentsToCommit;
         HWND m_qMediaHwnd = nullptr;
+        bool m_qMediaWindowActive = false;
 
         static TorrentExporter *m_instance;
     };
