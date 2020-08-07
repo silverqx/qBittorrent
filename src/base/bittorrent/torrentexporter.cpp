@@ -40,7 +40,7 @@ namespace {
         std::wstring text(windowText.get());
 
         // Example: qMedia v4.2.5 or qMedia v4.2.5beta3
-        const std::wregex re(L"^(qMedia) (v\\d+\\.\\d+\\.\\d+([a-zA-Z]+\\d{0,2})?)$");
+        const std::wregex re(L"^( {0,5}qMedia) (v\\d+\\.\\d+\\.\\d+([a-zA-Z]+\\d{0,2})?)$");
         if (!std::regex_match(windowText.get(), re))
             return true;
 
