@@ -110,6 +110,17 @@ namespace {
         });
         return result;
     }
+
+    /*! Get the count of all previewable files in torrents hash. */
+    int countPreviewableFiles(const QHash<quint64, TorrentHandle *> &torrents)
+    {
+        int previewableFilesCount = 0;
+        foreach (const TorrentHandle *const torrent, torrents)
+            for (int i = 0; i < torrent->filesCount() ; ++i)
+                if (Utils::Misc::isPreviewable(Utils::Fs::fileExtension(torrent->fileName(i))))
+                    ++previewableFilesCount;
+        return previewableFilesCount;
+    }
 }
 
 TorrentExporter *TorrentExporter::m_instance = nullptr;
@@ -201,10 +212,18 @@ void TorrentExporter::commitTorrentsTimerTimeout()
     if (m_torrentsToCommit->size() == 0)
         return;
 
-    // Multi insert for torrents
-    insertTorrentsToDb();
-    // Multi insert for previewable torrent files
-    insertPreviewableFilesToDb();
+    // Use transaction to guarantee data integrity
+    m_db.transaction();
+    try {
+        // Multi insert for torrents
+        insertTorrentsToDb();
+        // Multi insert for previewable torrent files
+        insertPreviewableFilesToDb();
+        m_db.commit();
+    }  catch (const ExporterError &) {
+        m_db.rollback();
+        return;
+    }
 
     m_torrentsToCommit->clear();
 
@@ -223,8 +242,17 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     if (previewableTorrents.size() == 0)
         return;
 
-    // Multi update of torrents
-    updateTorrentsInDb(previewableTorrents);
+    // Use transaction to guarantee data integrity
+    m_db.transaction();
+    try {
+        // Multi update of torrents and previewable files
+        updateTorrentsInDb(previewableTorrents);
+        updatePreviewableFilesInDb(previewableTorrents);
+        m_db.commit();
+    }  catch (const ExporterError &) {
+        m_db.rollback();
+        return;
+    }
 
     // Don't send message updates about torrents changed, when the qMedia is not in foreground
     if (m_qMediaHwnd == nullptr || m_qMediaWindowActive == false)
@@ -243,7 +271,7 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     ::SendMessage(m_qMediaHwnd, WM_COPYDATA, (WPARAM) MSG_QBT_TORRENTS_CHANGED, (LPARAM) (LPVOID) &torrentInfoHashes);
 }
 
-void TorrentExporter::connectToDb() const
+void TorrentExporter::connectToDb()
 {
     QSqlDatabase db = QSqlDatabase::addDatabase("QMYSQL");
     db.setHostName("127.0.0.1");
@@ -256,8 +284,12 @@ void TorrentExporter::connectToDb() const
     db.setPassword("99delfinu*");
 
     const bool ok = db.open();
-    if (!ok)
+    if (!ok) {
         qDebug() << "Connect to DB failed :" << db.lastError().text();
+        return;
+    }
+
+    m_db = db;
 }
 
 void TorrentExporter::removeTorrentFromDb(InfoHash infoHash) const
@@ -364,7 +396,7 @@ void TorrentExporter::removeDuplicitTorrents()
 void TorrentExporter::insertPreviewableFilesToDb() const
 {
     // TODO rewrite this with filterPreviewableTorrents() silverqx
-    QHash<quint64, TorrentHandle *> insertedTorrents = selectTorrentsByHashes(
+    const QHash<quint64, TorrentHandle *> insertedTorrents = selectTorrentsByHashes(
         m_torrentsToCommit->keys()
     );
 
@@ -374,16 +406,10 @@ void TorrentExporter::insertPreviewableFilesToDb() const
     }
 
     // Assemble query binding for multi insert on the base of count of inserted torrents
-    // Get the count of all previewable files, everything will be inserted in one insert query
-    int previewableFilesCount = 0;
-    foreach (const TorrentHandle *const torrent, insertedTorrents)
-        for (int i = 0; i < torrent->filesCount() ; ++i)
-            if (Utils::Misc::isPreviewable(Utils::Fs::fileExtension(torrent->fileName(i))))
-                ++previewableFilesCount;
-
+    // Everything will be inserted in one insert query
     QString previewableFilesBindings = "";
     int i = 0;
-    while (i < previewableFilesCount) {
+    while (i < countPreviewableFiles(insertedTorrents)) {
         previewableFilesBindings += "(?, ?, ?, ?), ";
         ++i;
     }
@@ -400,10 +426,10 @@ void TorrentExporter::insertPreviewableFilesToDb() const
     const TorrentHandle *torrent;
     QStringList filePaths;
     QVector<qreal> filesProgress;
-    QHash<quint64, TorrentHandle *>::const_iterator itPreviewableFiles =
+    QHash<quint64, TorrentHandle *>::const_iterator itInsertedTorrents =
         insertedTorrents.constBegin();
-    while (itPreviewableFiles != insertedTorrents.constEnd()) {
-        torrent = itPreviewableFiles.value();
+    while (itInsertedTorrents != insertedTorrents.constEnd()) {
+        torrent = itInsertedTorrents.value();
 #ifdef QT_DEBUG
         const auto torrentName = torrent->name();
 #endif
@@ -415,13 +441,13 @@ void TorrentExporter::insertPreviewableFilesToDb() const
             if (!Utils::Misc::isPreviewable(Utils::Fs::fileExtension(torrent->fileName(i))))
                 continue;
 
-            previewableFilesQuery.addBindValue(itPreviewableFiles.key());
+            previewableFilesQuery.addBindValue(itInsertedTorrents.key());
             previewableFilesQuery.addBindValue(filePaths[i]);
             previewableFilesQuery.addBindValue(torrent->fileSize(i));
             previewableFilesQuery.addBindValue(progressString(filesProgress[i]));
         }
 
-        ++itPreviewableFiles;
+        ++itInsertedTorrents;
     }
 
     const bool okFiles = previewableFilesQuery.exec();
@@ -448,15 +474,16 @@ QHash<quint64, TorrentHandle *> TorrentExporter::selectTorrentsByHashes(
     query.prepare(queryString);
 
     // Prepare query bindings
-    QList<InfoHash>::const_iterator it = hashes.constBegin();
-    while (it != hashes.constEnd()) {
-        query.addBindValue(QString(*it));
-        ++it;
+    QList<InfoHash>::const_iterator itHashes = hashes.constBegin();
+    while (itHashes != hashes.constEnd()) {
+        query.addBindValue(QString(*itHashes));
+        ++itHashes;
     }
 
     const bool ok = query.exec();
     if (!ok) {
-        qDebug() << "Select for selectTorrentsByHashes() failed :" << query.lastError().text();
+        qDebug() << "Select for selectTorrentsByHashes() failed :"
+                 << query.lastError().text();
         return {};
     }
 
@@ -472,6 +499,57 @@ QHash<quint64, TorrentHandle *> TorrentExporter::selectTorrentsByHashes(
     }
 
     return torrents;
+}
+
+QHash<quint64, TorrentHandle *> TorrentExporter::selectTorrentsByHandles(
+    const QVector<TorrentHandle *> &torrents
+) const
+{
+    QString queryBindings = "";
+    int i = 0;
+    while (i < torrents.size()) {
+        queryBindings += "?, ";
+        ++i;
+    }
+    queryBindings.chop(2);
+    const QString queryString = QString("SELECT id, hash FROM torrents WHERE hash IN (%1)")
+        .arg(queryBindings);
+
+    QSqlQuery query;
+    query.prepare(queryString);
+
+    // Prepare query bindings
+    QVector<TorrentHandle *>::const_iterator itTorrents = torrents.constBegin();
+    while (itTorrents != torrents.constEnd()) {
+        query.addBindValue(QString((*itTorrents)->hash()));
+        ++itTorrents;
+    }
+
+    const bool ok = query.exec();
+    if (!ok) {
+        qDebug() << "Select for selectTorrentsByHandles() failed :"
+                 << query.lastError().text();
+        return {};
+    }
+
+    // Create new QHash of selected torrents
+    QHash<quint64, TorrentHandle *> torrentsHash;
+    while (query.next()) {
+        // Find torrent handle by info hash
+        InfoHash hash(query.value(1).toString());
+        const auto itTorrentHandle = std::find_if(torrents.constBegin(), torrents.constEnd(),
+                                                  [&hash](const TorrentHandle *const torrent)
+        {
+            return (torrent->hash() == hash) ? true : false;
+        });
+        // Insert
+        torrentsHash.insert(
+            query.value(0).toULongLong(),
+            *itTorrentHandle
+        );
+    }
+
+    return torrentsHash;
 }
 
 void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrents) const
@@ -522,6 +600,72 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
                  << torrentsQuery.lastError().text();
 
     qDebug() << "Number of updated torrents :" << (torrentsQuery.numRowsAffected() / 2);
+
+    if (!okTorrents)
+        throw ExporterError("Update query for updateTorrentsInDb() failed.");
+}
+
+void TorrentExporter::updatePreviewableFilesInDb(const QVector<TorrentHandle *> &torrents) const
+{
+    // Create torrents hash keyed by torrent id, it's selected from db by torrent info hashes
+    // Needed because torrent id is needed in update query
+    const auto torrentsHash = selectTorrentsByHandles(torrents);
+    if (torrentsHash.size() == 0) {
+        qDebug() << "Selected torrents by hashes count is 0, this should never have happen :/";
+        return;
+    }
+
+    QString previewableFilesBindings = "";
+    int i = 0;
+    while (i < countPreviewableFiles(torrentsHash)) {
+        previewableFilesBindings += "(?, ?, ?, ?), ";
+        ++i;
+    }
+    previewableFilesBindings.chop(2);
+    const QString previewableFilesQueryString =
+        QString("INSERT INTO torrents_previewable_files (torrent_id, filepath, size, progress) "
+                "VALUES %1 AS new "
+                "ON DUPLICATE KEY UPDATE torrent_id=new.torrent_id, filepath=new.filepath, "
+                "size=new.size, progress=new.progress")
+        .arg(previewableFilesBindings);
+
+    QSqlQuery previewableFilesQuery;
+    previewableFilesQuery.prepare(previewableFilesQueryString);
+
+    // Prepare query bindings for torrents_previewable_files
+    const TorrentHandle *torrent;
+    QStringList filePaths;
+    QVector<qreal> filesProgress;
+    QHash<quint64, TorrentHandle *>::const_iterator itTorrents =
+        torrentsHash.constBegin();
+    while (itTorrents != torrentsHash.constEnd()) {
+        torrent = itTorrents.value();
+#ifdef QT_DEBUG
+        const auto torrentName = torrent->name();
+#endif
+
+        filePaths = torrent->absoluteFilePaths();
+        filesProgress = torrent->filesProgress();
+
+        for (int i = 0; i < torrent->filesCount(); ++i) {
+            if (!Utils::Misc::isPreviewable(Utils::Fs::fileExtension(torrent->fileName(i))))
+                continue;
+
+            previewableFilesQuery.addBindValue(itTorrents.key());
+            previewableFilesQuery.addBindValue(filePaths[i]);
+            previewableFilesQuery.addBindValue(torrent->fileSize(i));
+            previewableFilesQuery.addBindValue(progressString(filesProgress[i]));
+        }
+
+        ++itTorrents;
+    }
+
+    const bool okFiles = previewableFilesQuery.exec();
+    if (!okFiles) {
+        qDebug() << "Update for a previewable files failed :"
+                 << previewableFilesQuery.lastError().text();
+        throw ExporterError("Update query for updatePreviewableFilesInDb() failed.");
+    }
 }
 
 void TorrentExporter::setQMediaHwnd(const HWND hwnd)
