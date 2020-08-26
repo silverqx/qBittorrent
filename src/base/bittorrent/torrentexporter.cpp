@@ -121,9 +121,84 @@ namespace {
                     ++previewableFilesCount;
         return previewableFilesCount;
     }
+
+    struct StatusProperties
+    {
+        TorrentStatus state;
+        QString text;
+    };
+
+    const StatusProperties statusAllocating
+            {TorrentStatus::Allocating,         QStringLiteral("Allocating")};
+    const StatusProperties statusChecking
+            {TorrentStatus::Checking,           QStringLiteral("Checking")};
+    const StatusProperties statusCheckingResumeData
+            {TorrentStatus::CheckingResumeData, QStringLiteral("CheckingResumeData")};
+    const StatusProperties statusDownloading
+            {TorrentStatus::Downloading,        QStringLiteral("Downloading")};
+    const StatusProperties statusError
+            {TorrentStatus::Error,              QStringLiteral("Error")};
+    const StatusProperties statusFinished
+            {TorrentStatus::Finished,           QStringLiteral("Finished")};
+    const StatusProperties statusMissingFiles
+            {TorrentStatus::MissingFiles,       QStringLiteral("MissingFiles")};
+    const StatusProperties statusMoving
+            {TorrentStatus::Moving,             QStringLiteral("Moving")};
+    const StatusProperties statusPaused
+            {TorrentStatus::Paused,             QStringLiteral("Paused")};
+    const StatusProperties statusQueued
+            {TorrentStatus::Queued,             QStringLiteral("Queued")};
+    const StatusProperties statusStalled
+            {TorrentStatus::Stalled,            QStringLiteral("Stalled")};
+    const StatusProperties statusUnknown
+            {TorrentStatus::Unknown,            QStringLiteral("Unknown")};
+
+    /*! Map our custom TorrentStatus to the text representation. */
+    static const QHash<TorrentStatus, QString> statusTextHash
+    {
+        {TorrentStatus::Allocating,         QStringLiteral("Allocating")},
+        {TorrentStatus::Checking,           QStringLiteral("Checking")},
+        {TorrentStatus::CheckingResumeData, QStringLiteral("CheckingResumeData")},
+        {TorrentStatus::Downloading,        QStringLiteral("Downloading")},
+        {TorrentStatus::Error,              QStringLiteral("Error")},
+        {TorrentStatus::Finished,           QStringLiteral("Finished")},
+        {TorrentStatus::MissingFiles,       QStringLiteral("MissingFiles")},
+        {TorrentStatus::Moving,             QStringLiteral("Moving")},
+        {TorrentStatus::Paused,             QStringLiteral("Paused")},
+        {TorrentStatus::Queued,             QStringLiteral("Queued")},
+        {TorrentStatus::Stalled,            QStringLiteral("Stalled")},
+        {TorrentStatus::Unknown,            QStringLiteral("Unknown")},
+    };
+
+    /*! Map qBittorent TorrentState to our custom TorrentStatus used in qMedia. */
+    static const QHash<TorrentState, StatusProperties> statusHash
+    {
+        {TorrentState::Allocating,          statusAllocating},
+        {TorrentState::CheckingResumeData,  statusCheckingResumeData},
+        {TorrentState::CheckingDownloading, statusChecking},
+        {TorrentState::CheckingUploading,   statusChecking},
+        {TorrentState::Downloading,         statusDownloading},
+        {TorrentState::ForcedDownloading,   statusDownloading},
+        {TorrentState::DownloadingMetadata, statusDownloading},
+        {TorrentState::Error,               statusError},
+        {TorrentState::Uploading,           statusFinished},
+        {TorrentState::ForcedUploading,     statusFinished},
+        {TorrentState::StalledUploading,    statusFinished},
+        {TorrentState::QueuedUploading,     statusFinished},
+        {TorrentState::PausedUploading,     statusFinished},
+        {TorrentState::MissingFiles,        statusMissingFiles},
+        {TorrentState::Moving,              statusMoving},
+        {TorrentState::PausedDownloading,   statusPaused},
+        {TorrentState::QueuedDownloading,   statusQueued},
+        {TorrentState::StalledDownloading,  statusStalled},
+        {TorrentState::Unknown,             statusUnknown},
+    };
 }
 
 TorrentExporter *TorrentExporter::m_instance = nullptr;
+
+// TODO investigate default ctor in cpp file silverqx
+//Preferences::Preferences() = default;
 
 TorrentExporter::TorrentExporter()
 {
@@ -152,6 +227,8 @@ TorrentExporter::TorrentExporter()
 
 TorrentExporter::~TorrentExporter()
 {
+    correctTorrentStatusesOnExit();
+
     if (m_qMediaHwnd != nullptr)
         ::PostMessage(m_qMediaHwnd, MSG_QBITTORRENT_DOWN, NULL, NULL);
 
@@ -171,7 +248,7 @@ void TorrentExporter::freeInstance()
     m_instance = nullptr;
 }
 
-TorrentExporter* TorrentExporter::instance()
+TorrentExporter *TorrentExporter::instance()
 {
     return m_instance;
 }
@@ -321,7 +398,9 @@ void TorrentExporter::insertTorrentsToDb() const
     }
     torrentsBindings.chop(2);
     const QString torrentsQueryString =
-        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, hash) VALUES %1")
+        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, "
+                "hash, status) "
+                "VALUES %1")
             .arg(torrentsBindings);
 
     QSqlQuery torrentsQuery;
@@ -343,6 +422,7 @@ void TorrentExporter::insertTorrentsToDb() const
         torrentsQuery.addBindValue(torrent->incompletedSize());
         torrentsQuery.addBindValue(torrent->addedTime());
         torrentsQuery.addBindValue(QString(torrent->hash()));
+        torrentsQuery.addBindValue(statusHash[torrent->state()].text);
 
         ++itTorrents;
     }
@@ -552,6 +632,43 @@ QHash<quint64, TorrentHandle *> TorrentExporter::selectTorrentsByHandles(
     return torrentsHash;
 }
 
+QHash<quint64, InfoHash> TorrentExporter::selectTorrentsByStatuses(
+        const QList<TorrentStatus> &statuses
+) const
+{
+    // Prepare binding placeholders
+    auto placeholders = QStringLiteral("?, ").repeated(statuses.size());
+    placeholders.chop(2);
+
+    QSqlQuery query;
+    query.prepare(QStringLiteral("SELECT id, hash "
+                                 "FROM torrents WHERE status IN (%1)")
+                  .arg(placeholders));
+
+    // Prepare query bindings
+    QList<TorrentStatus>::const_iterator itStatuses = statuses.constBegin();
+    while (itStatuses != statuses.constEnd()) {
+        query.addBindValue(statusTextHash[*itStatuses]);
+        ++itStatuses;
+    }
+
+    const bool ok = query.exec();
+    if (!ok) {
+        qDebug() << "Select for selectTorrentsByStatuses() failed :"
+                 << query.lastError().text();
+        return {};
+    }
+
+    // Create new QHash of selected torrents
+    QHash<quint64, InfoHash> torrents;
+    while (query.next()) {
+        InfoHash hash(query.value("hash").toString());
+        torrents.insert(query.value("id").toULongLong(), hash);
+    }
+
+    return torrents;
+}
+
 void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrents) const
 {
     // Assemble query bindings for multi update ( used insert with ON DUPLICATE KEY UPDATE )
@@ -560,15 +677,16 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
     QString torrentsBindings = "";
     int i = 0;
     while (i < torrents.size()) {
-        torrentsBindings += "(?, ?, ?, ?, ?, ?, ?), ";
+        torrentsBindings += "(?, ?, ?, ?, ?, ?, ?, ?), ";
         ++i;
     }
     torrentsBindings.chop(2);
     const QString torrentsQueryString =
-        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, hash) VALUES %1 "
-                "ON DUPLICATE KEY UPDATE name=VALUES(name), progress=VALUES(progress), eta=VALUES(eta), "
-                "size=VALUES(size), remaining=VALUES(remaining), added_on=VALUES(added_on), "
-                "hash=VALUES(hash)")
+        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, hash, "
+                "status) VALUES %1 "
+                "ON DUPLICATE KEY UPDATE name=VALUES(name), progress=VALUES(progress), "
+                "eta=VALUES(eta), size=VALUES(size), remaining=VALUES(remaining), "
+                "added_on=VALUES(added_on), hash=VALUES(hash), status=VALUES(status)")
             .arg(torrentsBindings);
 
     QSqlQuery torrentsQuery;
@@ -590,6 +708,7 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
         torrentsQuery.addBindValue(torrent->incompletedSize());
         torrentsQuery.addBindValue(torrent->addedTime());
         torrentsQuery.addBindValue(QString(torrent->hash()));
+        torrentsQuery.addBindValue(statusHash[torrent->state()].text);
 
         ++itTorrents;
     }
@@ -668,7 +787,39 @@ void TorrentExporter::updatePreviewableFilesInDb(const QVector<TorrentHandle *> 
     }
 }
 
+void TorrentExporter::correctTorrentStatusesOnExit()
+{
+    // Obtain torrents which has to be updated
+    const auto statuses = QList<TorrentStatus> {TorrentStatus::Downloading};
+    const auto torrents = selectTorrentsByStatuses(statuses);
+    // Nothing to update
+    if (torrents.isEmpty())
+        return;
+
+    // Prepare binding placeholders
+    auto placeholders = QStringLiteral("?, ").repeated(torrents.size());
+    placeholders.chop(2);
+
+    QSqlQuery query;
+    query.prepare(QStringLiteral("UPDATE torrents SET status = ? WHERE id IN (%1)")
+                  .arg(placeholders));
+    query.addBindValue(statusStalled.text);
+    for (const auto &torrentId : torrents.keys())
+        query.addBindValue(torrentId);
+
+    const bool ok = query.exec();
+    if (!ok) {
+        qDebug() << "Update in correctTorrentStatuses() failed :" << query.lastError().text();
+        return;
+    }
+}
+
 void TorrentExporter::setQMediaHwnd(const HWND hwnd)
 {
     m_qMediaHwnd = hwnd;
+}
+
+uint BitTorrent::qHash(const BitTorrent::TorrentStatus &torrentStatus, const uint seed)
+{
+    return ::qHash(static_cast<int>(torrentStatus), seed);
 }
