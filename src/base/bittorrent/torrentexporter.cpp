@@ -399,7 +399,7 @@ void TorrentExporter::insertTorrentsToDb() const
     torrentsBindings.chop(2);
     const QString torrentsQueryString =
         QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, "
-                "hash, status, movie_detail_index) "
+                "hash, status) "
                 "VALUES %1")
             .arg(torrentsBindings);
 
@@ -423,8 +423,6 @@ void TorrentExporter::insertTorrentsToDb() const
         torrentsQuery.addBindValue(torrent->addedTime());
         torrentsQuery.addBindValue(QString(torrent->hash()));
         torrentsQuery.addBindValue(statusHash[torrent->state()].text);
-        // NULL int value
-        torrentsQuery.addBindValue(QVariant(QVariant::Int));
 
         ++itTorrents;
     }
