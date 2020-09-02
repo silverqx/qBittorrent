@@ -1989,6 +1989,8 @@ void Session::checkVideosAutoCategory(LoadTorrentParams &loadTorrentParams,
     ) {
         qDebug() << QStringLiteral("|-- Torrent is previewable, set auto category to 'videos'");
         loadTorrentParams.category = videosCategory;
+        loadTorrentParams.sequential = true;
+        loadTorrentParams.firstLastPiecePriority = true;
     }
 }
 
