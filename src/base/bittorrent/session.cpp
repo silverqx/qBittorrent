@@ -1977,6 +1977,21 @@ LoadTorrentParams Session::initLoadTorrentParams(const AddTorrentParams &addTorr
     return loadTorrentParams;
 }
 
+void Session::checkVideosAutoCategory(LoadTorrentParams &loadTorrentParams,
+                                      const TorrentInfo &metadata) const
+{
+    // TODO investigate how references to QStringLiteral() works silverqx
+    const auto videosCategory = QStringLiteral("videos");
+    if (loadTorrentParams.savePath.isEmpty()
+        && loadTorrentParams.category.isEmpty()
+        && m_categories.contains(videosCategory)
+        && metadata.isPreviewable()
+    ) {
+        qDebug() << QStringLiteral("|-- Torrent is previewable, set auto category to 'videos'");
+        loadTorrentParams.category = videosCategory;
+    }
+}
+
 // Add a torrent to the BitTorrent session
 bool Session::addTorrent_impl(const AddTorrentParams &addTorrentParams, const MagnetUri &magnetUri, TorrentInfo metadata)
 {
@@ -2000,6 +2015,7 @@ bool Session::addTorrent_impl(const AddTorrentParams &addTorrentParams, const Ma
     }
 
     LoadTorrentParams loadTorrentParams = initLoadTorrentParams(addTorrentParams);
+    checkVideosAutoCategory(loadTorrentParams, metadata);
     lt::add_torrent_params &p = loadTorrentParams.ltAddTorrentParams;
 
     // If empty then Automatic mode, otherwise Manual mode

@@ -582,6 +582,7 @@ namespace BitTorrent
         bool loadTorrentResumeData(const QByteArray &data, const TorrentInfo &metadata, LoadTorrentParams &torrentParams);
         bool loadTorrent(LoadTorrentParams params);
         LoadTorrentParams initLoadTorrentParams(const AddTorrentParams &addTorrentParams);
+        void checkVideosAutoCategory(LoadTorrentParams &loadTorrentParams, const TorrentInfo &metadata) const;
         bool addTorrent_impl(const AddTorrentParams &addTorrentParams, const MagnetUri &magnetUri, TorrentInfo torrentInfo = TorrentInfo());
         bool findIncompleteFiles(TorrentInfo &torrentInfo, QString &savePath) const;
 

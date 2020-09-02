@@ -341,6 +341,19 @@ QVector<QByteArray> TorrentInfo::pieceHashes() const
     return hashes;
 }
 
+bool TorrentInfo::isPreviewable() const
+{
+    const auto filesCountTmp = filesCount();
+    if (filesCountTmp < 1)
+        return false;
+
+    for (int i = 0; i < filesCountTmp; ++i)
+        if (Utils::Misc::isPreviewable(Utils::Fs::fileExtension(fileName(i))))
+            return true;
+
+    return false;
+}
+
 TorrentInfo::PieceRange TorrentInfo::filePieces(const QString &file) const
 {
     if (!isValid()) // if we do not check here the debug message will be printed, which would be not correct

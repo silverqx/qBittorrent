@@ -85,6 +85,7 @@ namespace BitTorrent
         QStringList filesForPiece(int pieceIndex) const;
         QVector<int> fileIndicesForPiece(int pieceIndex) const;
         QVector<QByteArray> pieceHashes() const;
+        bool isPreviewable() const;
 
         using PieceRange = IndexRange<int>;
         // returns pair of the first and the last pieces into which

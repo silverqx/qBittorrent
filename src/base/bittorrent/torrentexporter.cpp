@@ -82,10 +82,9 @@ namespace {
         if (!torrent->hasMetadata())
             return false;
 
-        for (int i = 0; i < torrent->filesCount(); ++i) {
+        for (int i = 0; i < torrent->filesCount(); ++i)
             if (Utils::Misc::isPreviewable(Utils::Fs::fileExtension(torrent->fileName(i))))
                 return true;
-        }
 
         return false;
     }
@@ -312,6 +311,8 @@ void TorrentExporter::commitTorrentsTimerTimeout()
 
 void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torrents)
 {
+    // TODO add hotkey to open options, eg O silverqx
+    // TODO don't update db so often, when qMedia is not up silverqx
     // TODO DB connection check also here silverqx
     // Filter out non previewable torrents
     auto previewableTorrents = filterPreviewableTorrents(torrents);
