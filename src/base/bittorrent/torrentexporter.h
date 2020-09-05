@@ -27,6 +27,7 @@ namespace BitTorrent
         Downloading,
         Error,
         Finished,
+        ForcedDownloading,
         MissingFiles,
         Moving,
         Paused,

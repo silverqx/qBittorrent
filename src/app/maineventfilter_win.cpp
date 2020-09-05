@@ -9,6 +9,18 @@
 #include "base/bittorrent/torrentexporter.h"
 #include "base/torrentexportercommon.h"
 
+namespace
+{
+    BitTorrent::InfoHash getInfoHashFromWmCopyData(const COPYDATASTRUCT &copyData)
+    {
+        const int dataSize = static_cast<int>(copyData.cbData);
+        const QByteArray infoHashArr =
+                QByteArray(static_cast<const char *>(copyData.lpData), dataSize);
+
+        return BitTorrent::InfoHash(QString::fromStdString(infoHashArr.toStdString()));
+    };
+}
+
 MainEventFilter::MainEventFilter()
     : QAbstractNativeEventFilter()
 {}
@@ -47,16 +59,41 @@ bool MainEventFilter::nativeEventFilter(const QByteArray &eventType, void *messa
 
     const COPYDATASTRUCT copyData = *reinterpret_cast<PCOPYDATASTRUCT>(msg->lParam);
     switch (static_cast<int>(msg->wParam)) {
-    case MSG_QMD_DELETE_TORRENT:
-        const int dataSize = static_cast<int>(copyData.cbData);
-        const QByteArray infoHashArr = QByteArray(static_cast<const char *>(copyData.lpData), dataSize);
-
-        qDebug() << "IPC qMedia : Delete torrent copyData size :" << dataSize;
-        qDebug() << "IPC qMedia : Delete torrent hash :" << infoHashArr;
-
-        const auto infoHash = BitTorrent::InfoHash(QString::fromStdString(infoHashArr.toStdString()));
+    case MSG_QMD_DELETE_TORRENT: {
+        const auto infoHash = getInfoHashFromWmCopyData(copyData);
+        qDebug() << "IPC qMedia : Delete torrent copyData size :" << static_cast<int>(copyData.cbData);
+        qDebug() << "IPC qMedia : Delete torrent hash :" << infoHash;
         BitTorrent::Session::instance()->deleteTorrent(infoHash, TorrentAndFiles);
         return true;
+    }
+    case MSG_QMD_PAUSE_TORRENT: {
+        const auto infoHash = getInfoHashFromWmCopyData(copyData);
+        qDebug() << "IPC qMedia : Pause torrent copyData size :" << static_cast<int>(copyData.cbData);
+        qDebug() << "IPC qMedia : Pause torrent hash :" << infoHash;
+        BitTorrent::Session::instance()->findTorrent(infoHash)->pause();
+        return true;
+    }
+    case MSG_QMD_RESUME_TORRENT: {
+        const auto infoHash = getInfoHashFromWmCopyData(copyData);
+        qDebug() << "IPC qMedia : Resume torrent copyData size :" << static_cast<int>(copyData.cbData);
+        qDebug() << "IPC qMedia : Resume torrent hash :" << infoHash;
+        BitTorrent::Session::instance()->findTorrent(infoHash)->resume();
+        return true;
+    }
+    case MSG_QMD_FORCE_RESUME_TORRENT: {
+        const auto infoHash = getInfoHashFromWmCopyData(copyData);
+        qDebug() << "IPC qMedia : Force resume torrent copyData size :" << static_cast<int>(copyData.cbData);
+        qDebug() << "IPC qMedia : Force resume torrent hash :" << infoHash;
+        BitTorrent::Session::instance()->findTorrent(infoHash)->resume(true);
+        return true;
+    }
+    case MSG_QMD_FORCE_RECHECK_TORRENT: {
+        const auto infoHash = getInfoHashFromWmCopyData(copyData);
+        qDebug() << "IPC qMedia : Force recheck torrent copyData size :" << static_cast<int>(copyData.cbData);
+        qDebug() << "IPC qMedia : Force recheck torrent hash :" << infoHash;
+        BitTorrent::Session::instance()->findTorrent(infoHash)->forceRecheck();
+        return true;
+    }
     }
 
     return false;

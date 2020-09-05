@@ -17,6 +17,7 @@
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/torrenthandle.h"
 #include "base/torrentexportercommon.h"
+#include "base/torrentexporterconfig.h"
 #include "base/utils/fs.h"
 #include "base/utils/misc.h"
 #include "base/utils/string.h"
@@ -24,6 +25,15 @@
 
 using namespace BitTorrent;
 
+// TODO fix clang tidy warnings silverqx
+// TODO fix _DLL, BOOST_ALL_DYN_LINK and clang analyze, also /MD vs /MT silverqx
+// https://www.boost.org/doc/libs/1_74_0/boost/system/config.hpp
+// https://www.boost.org/doc/libs/1_74_0/boost/config/auto_link.hpp
+// https://docs.microsoft.com/en-us/cpp/build/reference/md-mt-ld-use-run-time-library?view=vs-2019
+// May be relevant, do not know:
+// https://stackoverflow.com/questions/9527713/mixing-a-dll-boost-library-with-a-static-runtime-is-a-really-bad-idea
+// TODO investigate /MP compiler switch (jom vs nmake), QMAKE_CXXFLAGS += /MP silverqx
+// BUG update file paths after move silverqx
 namespace {
     const int COMMIT_INTERVAL = 1000;
 
@@ -139,6 +149,8 @@ namespace {
             {TorrentStatus::Error,              QStringLiteral("Error")};
     const StatusProperties statusFinished
             {TorrentStatus::Finished,           QStringLiteral("Finished")};
+    const StatusProperties statusForcedDownloading
+            {TorrentStatus::ForcedDownloading,  QStringLiteral("ForcedDownloading")};
     const StatusProperties statusMissingFiles
             {TorrentStatus::MissingFiles,       QStringLiteral("MissingFiles")};
     const StatusProperties statusMoving
@@ -161,6 +173,7 @@ namespace {
         {TorrentStatus::Downloading,        QStringLiteral("Downloading")},
         {TorrentStatus::Error,              QStringLiteral("Error")},
         {TorrentStatus::Finished,           QStringLiteral("Finished")},
+        {TorrentStatus::ForcedDownloading,  QStringLiteral("ForcedDownloading")},
         {TorrentStatus::MissingFiles,       QStringLiteral("MissingFiles")},
         {TorrentStatus::Moving,             QStringLiteral("Moving")},
         {TorrentStatus::Paused,             QStringLiteral("Paused")},
@@ -177,7 +190,6 @@ namespace {
         {TorrentState::CheckingDownloading, statusChecking},
         {TorrentState::CheckingUploading,   statusChecking},
         {TorrentState::Downloading,         statusDownloading},
-        {TorrentState::ForcedDownloading,   statusDownloading},
         {TorrentState::DownloadingMetadata, statusDownloading},
         {TorrentState::Error,               statusError},
         {TorrentState::Uploading,           statusFinished},
@@ -185,6 +197,7 @@ namespace {
         {TorrentState::StalledUploading,    statusFinished},
         {TorrentState::QueuedUploading,     statusFinished},
         {TorrentState::PausedUploading,     statusFinished},
+        {TorrentState::ForcedDownloading,   statusForcedDownloading},
         {TorrentState::MissingFiles,        statusMissingFiles},
         {TorrentState::Moving,              statusMoving},
         {TorrentState::PausedDownloading,   statusPaused},
@@ -719,7 +732,9 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
         qDebug() << "Update for updateTorrentsInDb() failed :"
                  << torrentsQuery.lastError().text();
 
+#if LOG_CHANGED_TORRENTS
     qDebug() << "Number of updated torrents :" << (torrentsQuery.numRowsAffected() / 2);
+#endif
 
     if (!okTorrents)
         throw ExporterError("Update query for updateTorrentsInDb() failed.");
