@@ -63,6 +63,11 @@ DEFINES += QT_STRICT_ITERATORS
 
 INCLUDEPATH += $$PWD
 
+PRECOMPILED_HEADER = pch.h
+
+HEADERS += \
+    pch.h
+
 include(app/app.pri)
 include(base/base.pri)
 !nogui: include(gui/gui.pri)

@@ -32,7 +32,6 @@ using namespace BitTorrent;
 // https://docs.microsoft.com/en-us/cpp/build/reference/md-mt-ld-use-run-time-library?view=vs-2019
 // May be relevant, do not know:
 // https://stackoverflow.com/questions/9527713/mixing-a-dll-boost-library-with-a-static-runtime-is-a-really-bad-idea
-// TODO investigate /MP compiler switch (jom vs nmake), QMAKE_CXXFLAGS += /MP silverqx
 // BUG update file paths after move silverqx
 namespace {
     const int COMMIT_INTERVAL = 1000;
@@ -71,7 +70,7 @@ namespace {
             != &moduleFilePath[0])
             return true;
 #else
-        if (::wcsstr(moduleFileName, L"C:\\optx64\\qMedia") != &moduleFileName[0])
+        if (::wcsstr(moduleFilePath, L"C:\\optx64\\qMedia") != &moduleFilePath[0])
             return true;
 #endif
         const QString moduleFileName = Utils::Fs::fileName(QString::fromWCharArray(moduleFilePath));
