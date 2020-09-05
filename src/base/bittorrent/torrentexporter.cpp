@@ -25,7 +25,6 @@
 
 using namespace BitTorrent;
 
-// TODO fix clang tidy warnings silverqx
 // TODO fix _DLL, BOOST_ALL_DYN_LINK and clang analyze, also /MD vs /MT silverqx
 // https://www.boost.org/doc/libs/1_74_0/boost/system/config.hpp
 // https://www.boost.org/doc/libs/1_74_0/boost/config/auto_link.hpp
@@ -426,6 +425,7 @@ void TorrentExporter::insertTorrentsToDb() const
         torrent = itTorrents.value();
 #ifdef QT_DEBUG
         const auto torrentName = torrent->name();
+        Q_UNUSED(torrentName);
 #endif
 
         torrentsQuery.addBindValue(torrent->name());
@@ -525,6 +525,7 @@ void TorrentExporter::insertPreviewableFilesToDb() const
         torrent = itInsertedTorrents.value();
 #ifdef QT_DEBUG
         const auto torrentName = torrent->name();
+        Q_UNUSED(torrentName);
 #endif
 
         filePaths = torrent->absoluteFilePaths();
@@ -712,6 +713,7 @@ void TorrentExporter::updateTorrentsInDb(const QVector<TorrentHandle *> &torrent
         torrent = *itTorrents;
 #ifdef QT_DEBUG
         const auto torrentName = torrent->name();
+        Q_UNUSED(torrentName);
 #endif
 
         torrentsQuery.addBindValue(torrent->name());
@@ -776,6 +778,7 @@ void TorrentExporter::updatePreviewableFilesInDb(const QVector<TorrentHandle *> 
         torrent = itTorrents.value();
 #ifdef QT_DEBUG
         const auto torrentName = torrent->name();
+        Q_UNUSED(torrentName);
 #endif
 
         filePaths = torrent->absoluteFilePaths();
@@ -819,8 +822,11 @@ void TorrentExporter::correctTorrentStatusesOnExit()
     query.prepare(QStringLiteral("UPDATE torrents SET status = ? WHERE id IN (%1)")
                   .arg(placeholders));
     query.addBindValue(statusStalled.text);
-    for (const auto &torrentId : torrents.keys())
-        query.addBindValue(torrentId);
+    QHashIterator<quint64, InfoHash> itTorrents(torrents);
+    while (itTorrents.hasNext()) {
+        itTorrents.next();
+        query.addBindValue(itTorrents.key());
+    }
 
     const bool ok = query.exec();
     if (!ok) {
