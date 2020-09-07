@@ -72,6 +72,10 @@ namespace BitTorrent
         void updatePreviewableFilesInDb(const QVector<BitTorrent::TorrentHandle *> &torrents) const;
         /*! Needed when qBittorrent is closed, to fix torrent downloading statuses. */
         void correctTorrentStatusesOnExit();
+        /*! Update torrent storage location in DB, after torrent was moved ( storage path changed ). */
+        void updateTorrentSaveDirInDb(
+                const std::pair<quint64, BitTorrent::TorrentHandle *> &torrentHashPair,
+                const QString &newPath) const;
 
         QTimer *m_dbCommitTimer;
         QHash<InfoHash, TorrentHandle *> *m_torrentsToCommit;
@@ -86,6 +90,7 @@ namespace BitTorrent
         void handleTorrentDeleted(BitTorrent::InfoHash infoHash);
         void commitTorrentsTimerTimeout();
         void handleTorrentsUpdated(const QVector<BitTorrent::TorrentHandle *> &torrents);
+        void handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle *const torrent, const QString &newPath) const;
     };
 
     // QHash requirements
