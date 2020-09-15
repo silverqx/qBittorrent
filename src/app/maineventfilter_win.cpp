@@ -43,11 +43,11 @@ bool MainEventFilter::nativeEventFilter(const QByteArray &eventType, void *messa
         qDebug() << "IPC qMedia : qMedia closed";
         BitTorrent::TorrentExporter::instance()->setQMediaHwnd(nullptr);
         return true;
-    case MSG_QMD_WINDOW_ACTIVATED:
+    case MSG_QMD_APPLICATION_ACTIVE:
         qDebug() << "IPC qMedia : qMedia window activated";
         BitTorrent::TorrentExporter::instance()->setQMediaWindowActive(true);
         return true;
-    case MSG_QMD_WINDOW_DEACTIVATED:
+    case MSG_QMD_APPLICATION_DEACTIVE:
         qDebug() << "IPC qMedia : qMedia window deactivated";
         BitTorrent::TorrentExporter::instance()->setQMediaWindowActive(false);
         return true;
