@@ -95,6 +95,8 @@ namespace BitTorrent
         selectTorrentsByStatuses(const QList<TorrentStatus> &statuses) const;
         /*! Needed when qBittorrent is closed, to fix torrent downloading statuses. */
         void correctTorrentStatusesOnExit() const;
+        /*! Needed when qBittorrent is closed, to set seeds, total_seeds, leechers and total_leechers to 0. */
+        void correctTorrentPeersOnExit() const;
         /*! Update torrent storage location in DB, after torrent was moved ( storage path changed ). */
         void updateTorrentSaveDirInDb(TorrentId torrentId, const QString &newPath,
                                       const QString &torrentName) const;

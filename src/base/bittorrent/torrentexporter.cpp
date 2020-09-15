@@ -289,6 +289,7 @@ TorrentExporter::TorrentExporter()
 TorrentExporter::~TorrentExporter()
 {
     correctTorrentStatusesOnExit();
+    correctTorrentPeersOnExit();
 
     if (m_qMediaHwnd != nullptr)
         ::PostMessage(m_qMediaHwnd, MSG_QBITTORRENT_DOWN, NULL, NULL);
@@ -547,14 +548,14 @@ void TorrentExporter::insertTorrentsToDb() const
 {
     // Assemble query binding placeholders for multi insert on the base of count
     // of torrents to insert.
-    auto placeholders = QStringLiteral("(?, ?, ?, ?, ?, ?, ?, ?, ?), ")
+    auto placeholders = QStringLiteral("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?), ")
                         .repeated(m_torrentsToCommit->size());
     // Will never be empty, is checked earlier
     placeholders.chop(2);
 
     const QString torrentsQueryString =
-        QString("INSERT INTO torrents (name, progress, eta, size, remaining, added_on, "
-                "hash, status, savepath) "
+        QString("INSERT INTO torrents (name, progress, eta, size, seeds, total_seeds, "
+                "leechers, total_leechers, remaining, added_on, hash, status, savepath) "
                 "VALUES %1")
             .arg(placeholders);
 
@@ -575,6 +576,10 @@ void TorrentExporter::insertTorrentsToDb() const
         torrentsQuery.addBindValue(progressString(torrent->progress()));
         torrentsQuery.addBindValue(torrent->eta());
         torrentsQuery.addBindValue(torrent->totalSize());
+        torrentsQuery.addBindValue(torrent->seedsCount());
+        torrentsQuery.addBindValue(torrent->totalSeedsCount());
+        torrentsQuery.addBindValue(torrent->leechsCount());
+        torrentsQuery.addBindValue(torrent->totalLeechersCount());
         torrentsQuery.addBindValue(torrent->incompletedSize());
         torrentsQuery.addBindValue(torrent->addedTime());
         torrentsQuery.addBindValue(QString(torrent->hash()));
@@ -797,9 +802,10 @@ TorrentExporter::selectTorrentsByHandles(
     placeholders.chop(2);
     // Qt don't know how to iterate result with json column, so I have to manually manager select
     const auto selectManaged = select == '*'
-                               ? QStringLiteral("id, name, progress, eta, size, remaining, "
-                                                "added_on, hash, status, movie_detail_index, "
-                                                "savepath")
+                               ? QStringLiteral("id, name, progress, eta, size, seeds, "
+                                                "total_seeds, leechers, total_leechers, "
+                                                "remaining, added_on, hash, status, "
+                                                "movie_detail_index, savepath")
                                : select;
     const QString queryString = QStringLiteral("SELECT %2 FROM torrents WHERE hash IN (%1)")
                                 .arg(placeholders, selectManaged);
@@ -1148,6 +1154,19 @@ void TorrentExporter::correctTorrentStatusesOnExit() const
     }
 }
 
+void TorrentExporter::correctTorrentPeersOnExit() const
+{
+    QSqlQuery query;
+    const bool ok = query.exec(QStringLiteral("UPDATE torrents "
+                                              "SET seeds = 0, total_seeds = 0, "
+                                              "leechers = 0, total_leechers = 0"));
+    if (!ok) {
+        qDebug() << "Update in correctTorrentPeersOnExit() failed :"
+                 << query.lastError().text();
+        return;
+    }
+}
+
 void TorrentExporter::updateTorrentSaveDirInDb(const TorrentId torrentId, const QString &newPath,
                                                const QString &torrentName) const
 {
@@ -1206,6 +1225,14 @@ TorrentExporter::traceTorrentChangedProperties(
                               torrentDb.value("eta").toLongLong());
         recordChangedProperty(QStringLiteral("size"), changed, torrentUpdated->totalSize(),
                               torrentDb.value("size").toLongLong());
+        recordChangedProperty(QStringLiteral("seeds"), changed, torrentUpdated->seedsCount(),
+                              torrentDb.value("seeds").toInt());
+        recordChangedProperty(QStringLiteral("total_seeds"), changed, torrentUpdated->totalSeedsCount(),
+                              torrentDb.value("total_seeds").toInt());
+        recordChangedProperty(QStringLiteral("leechers"), changed, torrentUpdated->leechsCount(),
+                              torrentDb.value("leechers").toInt());
+        recordChangedProperty(QStringLiteral("total_leechers"), changed, torrentUpdated->totalLeechersCount(),
+                              torrentDb.value("total_leechers").toInt());
         recordChangedProperty(QStringLiteral("remaining"), changed, torrentUpdated->incompletedSize(),
                               torrentDb.value("remaining").toLongLong());
         recordChangedProperty(QStringLiteral("status"), changed, statusHash[torrentUpdated->state()].text,
