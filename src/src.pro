@@ -42,6 +42,10 @@ stacktrace {
     }
 }
 
+# Torrent Exporter defines
+# ---
+DEFINES += PROJECT_QBITTORRENT
+
 CONFIG(debug, debug|release): message(Project is built in DEBUG mode.)
 CONFIG(release, debug|release): message(Project is built in RELEASE mode.)
 
@@ -68,6 +72,7 @@ PRECOMPILED_HEADER = pch.h
 HEADERS += \
     pch.h
 
+include(E:/c/qMedia/qMediaCommon/qmediacommon.pri)
 include(app/app.pri)
 include(base/base.pri)
 !nogui: include(gui/gui.pri)

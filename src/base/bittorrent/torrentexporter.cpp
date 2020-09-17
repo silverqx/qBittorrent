@@ -14,10 +14,10 @@
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
 #include "base/bittorrent/torrenthandle.h"
-#include "base/torrentexportercommon.h"
 #include "base/utils/fs.h"
 #include "base/utils/misc.h"
 #include "base/utils/string.h"
+#include "commonglobal.h"
 #include "gui/mainwindow.h"
 
 using namespace BitTorrent;
@@ -282,7 +282,7 @@ TorrentExporter::TorrentExporter()
     ::EnumWindows(EnumWindowsProc, NULL);
     // Send hwnd of MainWindow to qMedia, aka. inform that qBittorrent is running
     if (m_qMediaHwnd != nullptr)
-        ::PostMessage(m_qMediaHwnd, MSG_QBITTORRENT_UP,
+        ::PostMessage(m_qMediaHwnd, ::MSG_QBITTORRENT_UP,
             (WPARAM) dynamic_cast<Application *>(qApp)->mainWindow()->winId(), NULL);
 }
 
@@ -292,7 +292,7 @@ TorrentExporter::~TorrentExporter()
     correctTorrentPeersOnExit();
 
     if (m_qMediaHwnd != nullptr)
-        ::PostMessage(m_qMediaHwnd, MSG_QBITTORRENT_DOWN, NULL, NULL);
+        ::PostMessage(m_qMediaHwnd, ::MSG_QBITTORRENT_DOWN, NULL, NULL);
 
     delete m_torrentsToCommit;
     delete m_dbCommitTimer;
@@ -374,7 +374,7 @@ void TorrentExporter::commitTorrentsTimerTimeout()
     if (m_qMediaHwnd == nullptr)
         return;
 
-    ::PostMessage(m_qMediaHwnd, MSG_QBT_TORRENTS_ADDED, NULL, NULL);
+    ::PostMessage(m_qMediaHwnd, ::MSG_QBT_TORRENTS_ADDED, NULL, NULL);
 }
 
 void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torrents)
@@ -455,15 +455,9 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
 
     // Serialize torrent hashes for WM_COPYDATA ( std::string is perfect for this 😂 )
     std::string torrentHashesData;
-    for (const auto &torrent : previewableTorrents) {
+    for (const auto &torrent : previewableTorrents)
         torrentHashesData += static_cast<QString>(torrent->hash()).toStdString();
-    }
-    // Create WM_COPYDATA struct
-    COPYDATASTRUCT torrentInfoHashes;
-    torrentInfoHashes.lpData = static_cast<LPVOID>(const_cast<char *>(torrentHashesData.data()));
-    torrentInfoHashes.cbData = static_cast<DWORD>(torrentHashesData.size());
-    torrentInfoHashes.dwData = NULL;
-    ::SendMessage(m_qMediaHwnd, WM_COPYDATA, (WPARAM) MSG_QBT_TORRENTS_CHANGED, (LPARAM) (LPVOID) &torrentInfoHashes);
+    ::IpcSendStdString(m_qMediaHwnd, ::MSG_QBT_TORRENTS_CHANGED, torrentHashesData);
 }
 
 void TorrentExporter::handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle *const torrent,
@@ -473,8 +467,9 @@ void TorrentExporter::handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle
     if (!torrentContainsPreviewableFiles(torrent))
         return;
 
+    const auto infoHash = torrent->hash();
     const auto torrents = mapTorrentHandleById(
-                              TorrentHandleByInfoHashHash({{torrent->hash(), torrent}}));
+                              TorrentHandleByInfoHashHash({{infoHash, torrent}}));
     const auto torrentsSize = torrents.size();
     const auto torrentName = torrent->name();
     // Torrent isn't in db
@@ -495,15 +490,8 @@ void TorrentExporter::handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle
     if (m_qMediaHwnd == nullptr)
         return;
 
-    // Serialize torrent hashes for WM_COPYDATA ( std::string is perfect for this 😂 )
-    const std::string torrentHashData(static_cast<QString>(torrent->hash()).toStdString());
-    // Create WM_COPYDATA struct
-    COPYDATASTRUCT torrentInfoHash;
-    torrentInfoHash.lpData = static_cast<LPVOID>(const_cast<char *>(torrentHashData.data()));
-    torrentInfoHash.cbData = static_cast<DWORD>(torrentHashData.size());
-    torrentInfoHash.dwData = NULL;
-    ::SendMessage(m_qMediaHwnd, WM_COPYDATA, (WPARAM) MSG_QBT_TORRENT_MOVED,
-                  (LPARAM) (LPVOID) &torrentInfoHash);
+    // Inform qMedia about moved torrent
+    ::IpcSendInfoHash(m_qMediaHwnd, ::MSG_QBT_TORRENT_MOVED, infoHash);
 }
 
 QSqlDatabase TorrentExporter::connectToDb() const
@@ -541,7 +529,7 @@ void TorrentExporter::removeTorrentFromDb(InfoHash infoHash) const
     if (m_qMediaHwnd == nullptr)
         return;
 
-    ::PostMessage(m_qMediaHwnd, MSG_QBT_TORRENT_REMOVED, NULL, NULL);
+    ::PostMessage(m_qMediaHwnd, ::MSG_QBT_TORRENT_REMOVED, NULL, NULL);
 }
 
 void TorrentExporter::insertTorrentsToDb() const

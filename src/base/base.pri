@@ -68,7 +68,6 @@ HEADERS += \
     $$PWD/search/searchpluginmanager.h \
     $$PWD/settingsstorage.h \
     $$PWD/settingvalue.h \
-    $$PWD/torrentexportercommon.h \
     $$PWD/torrentexporterconfig.h \
     $$PWD/torrentfileguard.h \
     $$PWD/torrentfilter.h \
