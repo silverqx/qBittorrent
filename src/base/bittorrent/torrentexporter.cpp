@@ -52,7 +52,8 @@ namespace {
         ::GetWindowThreadProcessId(hwnd, &pid);
         const HANDLE processHandle = ::OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
         if (processHandle == NULL) {
-            qDebug() << "OpenProcess() in EnumWindows() failed : " << ::GetLastError();
+            qDebug() << "OpenProcess() in EnumWindows() failed : "
+                     << ::GetLastError();
             return true;
         }
 
@@ -75,7 +76,8 @@ namespace {
         if (moduleFileName != "qMedia.exe")
             return true;
 
-        qDebug() << "HWND for qMedia window found :" << hwnd;
+        qDebug() << "HWND for qMedia window found :"
+                 << hwnd;
         l_torrentExporter->setQMediaHwnd(hwnd);
 
         return false;
@@ -83,7 +85,7 @@ namespace {
 
 #ifdef QT_DEBUG
     Q_DECL_UNUSED
-    const auto parseExecutedQuery = [](const auto &query)
+    const auto parseExecutedQuery = [](const QSqlQuery &query)
     {
         auto executedQuery = query.executedQuery();
         const auto boundValues = query.boundValues().values();
@@ -104,7 +106,8 @@ namespace {
 #  ifdef QT_DEBUG
 #    define PARSE_EXECUTED_QUERY(query) parseExecutedQuery(query)
 #  else
-#    define PARSE_EXECUTED_QUERY(query) QStringLiteral("PARSE_EXECUTED_QUERY() macro enabled only in QT_DEBUG mode.")
+#    define PARSE_EXECUTED_QUERY(query)
+            QStringLiteral("PARSE_EXECUTED_QUERY() macro enabled only in QT_DEBUG mode.")
 #  endif
 #endif
 
@@ -113,9 +116,9 @@ namespace {
     Q_NORETURN
 #  endif
     Q_DECL_UNUSED
-    const auto logExecutedQuery = [](const auto &query)
+    const auto logExecutedQuery = [](const QSqlQuery &query)
     {
-        qDebug().noquote() << QStringLiteral("Query :")
+        qDebug().noquote() << QStringLiteral("Executed Query :")
                            << parseExecutedQuery(query);
     };
 #endif
@@ -270,13 +273,18 @@ TorrentExporter::TorrentExporter()
     // Initialize the commit timer for added torrents
     m_dbCommitTimer->setInterval(COMMIT_INTERVAL);
     m_dbCommitTimer->setSingleShot(true);
-    connect(m_dbCommitTimer, &QTimer::timeout, this, &TorrentExporter::commitTorrentsTimerTimeout);
+    connect(m_dbCommitTimer, &QTimer::timeout,
+            this, &TorrentExporter::commitTorrentsTimerTimeout);
 
     // Connect events
-    connect(Session::instance(), &Session::torrentAdded, this, &TorrentExporter::handleTorrentAdded);
-    connect(Session::instance(), &Session::torrentDeleted, this, &TorrentExporter::handleTorrentDeleted);
-    connect(Session::instance(), &Session::torrentsUpdated, this, &TorrentExporter::handleTorrentsUpdated);
-    connect(Session::instance(), &Session::torrentStorageMoveFinished, this, &TorrentExporter::handleTorrentStorageMoveFinished);
+    connect(Session::instance(), &Session::torrentAdded,
+            this, &TorrentExporter::handleTorrentAdded);
+    connect(Session::instance(), &Session::torrentDeleted,
+            this, &TorrentExporter::handleTorrentDeleted);
+    connect(Session::instance(), &Session::torrentsUpdated,
+            this, &TorrentExporter::handleTorrentsUpdated);
+    connect(Session::instance(), &Session::torrentStorageMoveFinished,
+            this, &TorrentExporter::handleTorrentStorageMoveFinished);
 
     // Find qMedia's main window HWND
     ::EnumWindows(EnumWindowsProc, NULL);
@@ -325,11 +333,13 @@ void TorrentExporter::handleTorrentAdded(TorrentHandle *const torrent) const
     if (!torrentContainsPreviewableFiles(torrent))
         return;
 
+    qDebug("Add torrent(%s) to db : \"%s\"",
+           qUtf8Printable(static_cast<QString>(torrent->hash())),
+           qUtf8Printable(torrent->name()));
+
     m_torrentsToCommit->insert(torrent->hash(), torrent);
     // Start or Restart Timer
     m_dbCommitTimer->start();
-
-    qDebug() << "|- Added :" << torrent->name();
 }
 
 void TorrentExporter::handleTorrentDeleted(InfoHash infoHash) const
@@ -339,12 +349,15 @@ void TorrentExporter::handleTorrentDeleted(InfoHash infoHash) const
 //        return;
 //    }
 
+    qDebug() << "Remove torrent from db :"
+             << static_cast<QString>(infoHash);
+
     removeTorrentFromDb(infoHash);
-    qDebug() << "|- Deleted :" << infoHash;
 }
 
 void TorrentExporter::commitTorrentsTimerTimeout()
 {
+    // Remove existing torrents from commit hash
     removeExistingTorrents();
 
     // Nothing to insert to DB
@@ -365,7 +378,8 @@ void TorrentExporter::commitTorrentsTimerTimeout()
         m_db.commit();
     }  catch (const ExporterError &e) {
         m_db.rollback();
-        qCritical() << "Critical in commitTorrentsTimerTimeout() :" << e.what();
+        qCritical() << "Critical in commitTorrentsTimerTimeout() :"
+                    << e.what();
         return;
     }
 
@@ -391,8 +405,8 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     // Needed because torrent id is needed in update query.
     // Also return actual QSqlRecords keyed by torrent id, which are needed to trace changed
     // properties.
-    const auto [torrentsUpdated, torrentsInDb] = selectTorrentsByHandles(previewableTorrents,
-                                                                         QStringLiteral("*"));
+    const auto [torrentsUpdated, torrentsInDb] =
+            selectTorrentsByHandles(previewableTorrents, QStringLiteral("*"));
     // Nothing to update
     if (torrentsUpdated.size() == 0) {
         qDebug() << "Selected torrents by handles count is 0, in handleTorrentsUpdated(), "
@@ -415,17 +429,17 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     const auto freeTorrentFilesInDb =
             [&torrentsFilesInDb]
     {
-        for (auto torrentFilesInDb : torrentsFilesInDb)
+        for (const auto *const torrentFilesInDb : torrentsFilesInDb)
             delete torrentFilesInDb;
     };
 
     const auto freeChangedProperties =
             [&torrentChangedProperties, &torrentsFilesChangedProperties]
     {
-        for (auto torrentChangedPropertiesVal : torrentChangedProperties)
+        for (const auto *const torrentChangedPropertiesVal : torrentChangedProperties)
             delete torrentChangedPropertiesVal;
-        for (auto torrentFilesChangedProperties : torrentsFilesChangedProperties) {
-            for (auto torrentFileChangedProperties : *torrentFilesChangedProperties)
+        for (const auto *const torrentFilesChangedProperties : torrentsFilesChangedProperties) {
+            for (const auto *const torrentFileChangedProperties : *torrentFilesChangedProperties)
                 delete torrentFileChangedProperties;
             delete torrentFilesChangedProperties;
         }
@@ -441,7 +455,8 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
         m_db.rollback();
         freeChangedProperties();
         freeTorrentFilesInDb();
-        qCritical() << "Critical in handleTorrentsUpdated() :" << e.what();
+        qCritical() << "Critical in handleTorrentsUpdated() :"
+                    << e.what();
         return;
     }
 
@@ -460,25 +475,27 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     ::IpcSendStdString(m_qMediaHwnd, ::MSG_QBT_TORRENTS_CHANGED, torrentHashesData);
 }
 
-void TorrentExporter::handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle *const torrent,
-                                                       const QString &newPath) const
+void TorrentExporter::handleTorrentStorageMoveFinished(
+        const BitTorrent::TorrentHandle *const torrent, const QString &newPath) const
 {
     // Process only previewable torrents
     if (!torrentContainsPreviewableFiles(torrent))
         return;
 
     const auto infoHash = torrent->hash();
-    const auto torrents = mapTorrentHandleById(
-                              TorrentHandleByInfoHashHash({{infoHash, torrent}}));
+    const auto torrents =
+            mapTorrentHandleById(TorrentHandleByInfoHashHash({{infoHash, torrent}}));
     const auto torrentsSize = torrents.size();
     const auto torrentName = torrent->name();
     // Torrent isn't in db
     if (torrentsSize == 0) {
         qDebug() << "Torrent isn't in db, in handleTorrentStorageMoveFinished(), this "
-                    "should never have happen :/ :" << torrentName;
+                    "should never have happen :/ :"
+                 << torrentName;
         return;
     } else if (torrentsSize > 1) {
-        qDebug() << "Wtf, 'torrentsSize > 1', more torrents selected :" << torrentName;
+        qDebug() << "Wtf, 'torrentsSize > 1', more torrents selected :"
+                 << torrentName;
         return;
     }
 
@@ -496,7 +513,7 @@ void TorrentExporter::handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle
 
 QSqlDatabase TorrentExporter::connectToDb() const
 {
-    QSqlDatabase db = QSqlDatabase::addDatabase("QMYSQL");
+    auto db = QSqlDatabase::addDatabase("QMYSQL");
     db.setHostName("127.0.0.1");
 #ifdef QT_DEBUG
     db.setDatabaseName("q_media_test");
@@ -506,23 +523,25 @@ QSqlDatabase TorrentExporter::connectToDb() const
     db.setUserName("szachara");
     db.setPassword("99delfinu*");
 
-    const bool ok = db.open();
+    const auto ok = db.open();
     if (!ok)
-        qDebug() << "Connect to DB failed :" << db.lastError().text();
+        qDebug() << "Connect to DB failed :"
+                 << db.lastError().text();
 
     return db;
 }
 
-void TorrentExporter::removeTorrentFromDb(InfoHash infoHash) const
+void TorrentExporter::removeTorrentFromDb(const InfoHash &infoHash) const
 {
     QSqlQuery query;
-    query.prepare("DELETE FROM torrents WHERE hash = :hash");
+    query.prepare(QStringLiteral("DELETE FROM torrents WHERE hash = :hash"));
     query.bindValue(":hash", static_cast<QString>(infoHash));
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
-        qDebug() << "Delete for removeTorrentFromDb() failed :"
-                 << query.lastError().text();
+        qDebug("Delete query in removeTorrentFromDb() for torrent(%s) failed : \"%s\"",
+               qUtf8Printable(static_cast<QString>(infoHash)),
+               qUtf8Printable(query.lastError().text()));
         return;
     }
 
@@ -541,10 +560,11 @@ void TorrentExporter::insertTorrentsToDb() const
     // Will never be empty, is checked earlier
     placeholders.chop(2);
 
-    const QString torrentsQueryString =
-        QString("INSERT INTO torrents (name, progress, eta, size, seeds, total_seeds, "
-                "leechers, total_leechers, remaining, added_on, hash, status, savepath) "
-                "VALUES %1")
+    const auto torrentsQueryString =
+            QStringLiteral("INSERT INTO torrents (name, progress, eta, size, seeds, "
+                           "total_seeds, leechers, total_leechers, remaining, added_on, "
+                           "hash, status, savepath) "
+                           "VALUES %1")
             .arg(placeholders);
 
     QSqlQuery torrentsQuery;
@@ -578,11 +598,11 @@ void TorrentExporter::insertTorrentsToDb() const
         ++itTorrents;
     }
 
-    const bool ok = torrentsQuery.exec();
+    const auto ok = torrentsQuery.exec();
     if (ok)
         return;
 
-    qDebug() << "Insert in insertTorrentsToDb() failed :"
+    qDebug() << "Insert torrents in insertTorrentsToDb() failed :"
              << torrentsQuery.lastError().text();
     throw ExporterError("Insert torrents in insertTorrentsToDb() failed.");
 }
@@ -593,8 +613,8 @@ void TorrentExporter::removeExistingTorrents()
     auto placeholders = QStringLiteral("?, ").repeated(m_torrentsToCommit->size());
     // Will never be empty, timer is triggered only after new torrent is added
     placeholders.chop(2);
-    const QString queryString = QStringLiteral("SELECT hash FROM torrents WHERE hash IN (%1)")
-                                .arg(placeholders);
+    const auto queryString = QStringLiteral("SELECT hash FROM torrents WHERE hash IN (%1)")
+                             .arg(placeholders);
 
     QSqlQuery query;
     query.setForwardOnly(true);
@@ -607,9 +627,9 @@ void TorrentExporter::removeExistingTorrents()
         ++itTorrent;
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok)
-        qDebug() << "Select in removeDuplicitTorrents() failed :"
+        qDebug() << "Select torrents in removeDuplicitTorrents() failed :"
                  << query.lastError().text();
 
     // Any duplicit torrents in DB
@@ -679,11 +699,11 @@ void TorrentExporter::insertPreviewableFilesToDb() const
         ++itInsertedTorrents;
     }
 
-    const bool ok = previewableFilesQuery.exec();
+    const auto ok = previewableFilesQuery.exec();
     if (ok)
         return;
 
-    qDebug() << "Insert for a previewable files failed :"
+    qDebug() << "Insert torrent files in insertPreviewableFilesToDb() failed :"
              << previewableFilesQuery.lastError().text();
     throw ExporterError("Insert torrent files in insertPreviewableFilesToDb() failed.");
 }
@@ -695,9 +715,9 @@ TorrentExporter::selectTorrentIdsToCommitByHashes(const QList<InfoHash> &hashes)
     auto placeholders = QStringLiteral("?, ").repeated(hashes.size());
     placeholders.chop(2);
 
-    const QString queryString = QStringLiteral("SELECT id, hash "
-                                               "FROM torrents WHERE hash IN (%1)")
-                                .arg(placeholders);
+    const auto queryString = QStringLiteral("SELECT id, hash "
+                                            "FROM torrents WHERE hash IN (%1)")
+                             .arg(placeholders);
 
     QSqlQuery query;
     query.setForwardOnly(true);
@@ -710,9 +730,9 @@ TorrentExporter::selectTorrentIdsToCommitByHashes(const QList<InfoHash> &hashes)
         ++itHashes;
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
-        qDebug() << "Select in selectTorrentsByHashes() failed :"
+        qDebug() << "Select query in selectTorrentIdsToCommitByHashes() failed :"
                  << query.lastError().text();
         return {};
     }
@@ -737,8 +757,8 @@ TorrentExporter::mapTorrentHandleById(const TorrentHandleByInfoHashHash &torrent
     // Prepare binding placeholders
     auto placeholders = QStringLiteral("?, ").repeated(torrents.size());
     placeholders.chop(2);
-    const QString queryString = QString("SELECT id, hash FROM torrents WHERE hash IN (%1)")
-                                .arg(placeholders);
+    const auto queryString = QStringLiteral("SELECT id, hash FROM torrents WHERE hash IN (%1)")
+                             .arg(placeholders);
 
     QSqlQuery query;
     query.setForwardOnly(true);
@@ -751,9 +771,9 @@ TorrentExporter::mapTorrentHandleById(const TorrentHandleByInfoHashHash &torrent
         ++itTorrents;
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
-        qDebug() << "Select in selectTorrentsByHandles() failed :"
+        qDebug() << "Select query in mapTorrentHandleById() failed :"
                  << query.lastError().text();
         return {};
     }
@@ -795,8 +815,8 @@ TorrentExporter::selectTorrentsByHandles(
                                                 "remaining, added_on, hash, status, "
                                                 "movie_detail_index, savepath")
                                : select;
-    const QString queryString = QStringLiteral("SELECT %2 FROM torrents WHERE hash IN (%1)")
-                                .arg(placeholders, selectManaged);
+    const auto queryString = QStringLiteral("SELECT %2 FROM torrents WHERE hash IN (%1)")
+                             .arg(placeholders, selectManaged);
 
     QSqlQuery query;
     query.setForwardOnly(true);
@@ -809,9 +829,9 @@ TorrentExporter::selectTorrentsByHandles(
         ++itTorrents;
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
-        qDebug() << "Select in selectTorrentsByHandles() failed :"
+        qDebug() << "Select query in selectTorrentsByHandles() failed :"
                  << query.lastError().text();
         return {};
     }
@@ -846,7 +866,7 @@ TorrentExporter::selectTorrentsFilesByHandles(const TorrentHandleByIdHash &torre
     auto placeholders = QStringLiteral("?, ").repeated(torrentsUpdated.size());
     // Will never be empty, is checked earlier
     placeholders.chop(2);
-    const QString queryString =
+    const auto queryString =
             QStringLiteral("SELECT id, torrent_id, file_index, filepath, size, progress "
                            "FROM torrents_previewable_files "
                            "WHERE torrent_id IN (%1)")
@@ -863,9 +883,9 @@ TorrentExporter::selectTorrentsFilesByHandles(const TorrentHandleByIdHash &torre
         ++itTorrents;
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
-        qDebug() << "Select in selectTorrentsFilesByHandles() failed :"
+        qDebug() << "Select query in selectTorrentsFilesByHandles() failed :"
                  << query.lastError().text();
         return {};
     }
@@ -909,9 +929,9 @@ TorrentExporter::selectTorrentsByStatuses(const QList<TorrentStatus> &statuses) 
         ++itStatuses;
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
-        qDebug() << "Select in selectTorrentsByStatuses() failed :"
+        qDebug() << "Select query in selectTorrentsByStatuses() failed :"
                  << query.lastError().text();
         return {};
     }
@@ -937,8 +957,8 @@ void TorrentExporter::updateTorrentsInDb(
     const auto rollbackSavePoint = [](const auto torrentId)
     {
         QSqlQuery rollbackSavePoint;
-        const auto &query = QStringLiteral("ROLLBACK TO SAVEPOINT torrent_%1")
-                            .arg(torrentId);
+        const auto query = QStringLiteral("ROLLBACK TO SAVEPOINT torrent_%1")
+                           .arg(torrentId);
         Q_ASSERT_X(rollbackSavePoint.exec(query),
                    "updateTorrentsInDb()",
                    query.toLatin1().constData());
@@ -954,7 +974,7 @@ void TorrentExporter::updateTorrentsInDb(
         // If something unexpected happens, only currently processed torrent will be
         // rollback-ed, so savepoints are ideal for this.
         QSqlQuery savePoint;
-        const auto &query = QStringLiteral("SAVEPOINT torrent_%1").arg(torrentId);
+        const auto query = QStringLiteral("SAVEPOINT torrent_%1").arg(torrentId);
         Q_ASSERT_X(savePoint.exec(query),
                    "updateTorrentsInDb()",
                    query.toLatin1().constData());
@@ -968,17 +988,17 @@ void TorrentExporter::updateTorrentsInDb(
 #endif
         } catch (const ExporterError &e) {
             rollbackSavePoint(torrentId);
-            qFatal(QStringLiteral("Critical in updateTorrentsInDb() : %1")
-                   .arg(e.what()).toUtf8().constData());
+            qFatal("Critical in updateTorrentsInDb() : \"%s\"",
+                   e.what());
         }
 
         ++successUpdates;
     }
 
+    const auto torrentsChangedSize = torrentsChangedHash.size();
 #if LOG_CHANGED_TORRENTS
     {
         // TODO add the same for files updates, to much work for now, fuck it 😂 silverqx
-        const auto torrentsChangedSize = torrentsChangedHash.size();
         const auto unsuccessUpdates = (torrentsChangedSize - successUpdates);
         if (unsuccessUpdates > 0)
             qWarning("%d torrents out of %d were not updated.",
@@ -988,7 +1008,8 @@ void TorrentExporter::updateTorrentsInDb(
 #endif
 
     if (successUpdates == 0)
-        throw ExporterError("All updates was unsuccessful.");
+        throw ExporterError(QStringLiteral("All '%1' updates was unsuccessful.")
+                            .arg(torrentsChangedSize).toUtf8().constData());
 }
 
 void TorrentExporter::updateTorrentInDb(
@@ -1026,14 +1047,15 @@ void TorrentExporter::updateTorrentInDb(
     query.addBindValue(torrentId);
 
     // Execute query
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok)
-        qDebug() << "Update in updateTorrentInDb() failed :"
+        qDebug() << "Update query in updateTorrentInDb() failed :"
                  << query.lastError().text();
 
 #if LOG_CHANGED_TORRENTS
-    qDebug() << "Number of updated torrents :" << query.numRowsAffected();
-    qDebug().noquote() << parseExecutedQuery(query);
+    qDebug() << "Number of updated torrents :"
+             << query.numRowsAffected();
+    logExecutedQuery(query);
 #endif
 
     if (!ok)
@@ -1051,7 +1073,8 @@ void TorrentExporter::updatePreviewableFilesInDb(
 {
     // Handle nullptr
     if (changedFilesProperties == nullptr)
-        throw ExporterError("'changedFilesProperties == nullptr' in updatePreviewableFilesInDb().");
+        throw ExporterError("'changedFilesProperties == nullptr' in "
+                            "updatePreviewableFilesInDb().");
     // Nothing to update
     const auto changedFilesPropertiesEmpty = changedFilesProperties->isEmpty();
     Q_ASSERT(!changedFilesPropertiesEmpty);
@@ -1094,14 +1117,15 @@ void TorrentExporter::updatePreviewableFilesInDb(
         query.addBindValue(torrentFileId);
 
         // Execute query
-        const bool ok = query.exec();
+        const auto ok = query.exec();
         if (!ok)
-            qDebug() << "Update in updatePreviewableFilesInDb() failed :"
+            qDebug() << "Update query in updatePreviewableFilesInDb() failed :"
                      << query.lastError().text();
 
 #if LOG_CHANGED_TORRENTS
-        qDebug("Number of updated torrent(ID%llu) files : %d", torrentId, query.numRowsAffected());
-        qDebug().noquote() << parseExecutedQuery(query);
+        qDebug("Number of updated torrent(ID%llu) files : %d",
+               torrentId, query.numRowsAffected());
+        logExecutedQuery(query);
 #endif
 
         if (!ok)
@@ -1134,7 +1158,7 @@ void TorrentExporter::correctTorrentStatusesOnExit() const
         query.addBindValue(itTorrents.key());
     }
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
         qDebug() << "Update in correctTorrentStatuses() failed :"
                  << query.lastError().text();
@@ -1145,7 +1169,7 @@ void TorrentExporter::correctTorrentStatusesOnExit() const
 void TorrentExporter::correctTorrentPeersOnExit() const
 {
     QSqlQuery query;
-    const bool ok = query.exec(QStringLiteral("UPDATE torrents "
+    const auto ok = query.exec(QStringLiteral("UPDATE torrents "
                                               "SET seeds = 0, total_seeds = 0, "
                                               "leechers = 0, total_leechers = 0"));
     if (!ok) {
@@ -1158,16 +1182,16 @@ void TorrentExporter::correctTorrentPeersOnExit() const
 void TorrentExporter::updateTorrentSaveDirInDb(const TorrentId torrentId, const QString &newPath,
                                                const QString &torrentName) const
 {
-    qDebug("Updating savepath in db for torrent(ID%llu) : %s", torrentId,
-           qUtf8Printable(torrentName));
+    qDebug("Updating savepath in db for torrent(ID%llu) : %s",
+           torrentId, qUtf8Printable(torrentName));
 
     QSqlQuery query;
-    query.prepare("UPDATE torrents SET savepath = ? WHERE id = ?");
+    query.prepare(QStringLiteral("UPDATE torrents SET savepath = ? WHERE id = ?"));
 
     query.addBindValue(newPath);
     query.addBindValue(torrentId);
 
-    const bool ok = query.exec();
+    const auto ok = query.exec();
     if (!ok) {
         qDebug() << "Update savepath in updateTorrentSaveDirInDb() failed :"
                  << query.lastError().text();
@@ -1189,7 +1213,7 @@ TorrentExporter::traceTorrentChangedProperties(
         const auto torrentId = itTorrentsHash.key();
         /*! Torrent from db as QSqlRecord. */
         const auto torrentDb = torrentsInDb[torrentId];
-        const auto torrentChangedProperties = new QVariantHash;
+        auto *const torrentChangedProperties = new QVariantHash;
 
         // Determine if torrent properties was changed
         auto changed = false;
@@ -1205,25 +1229,35 @@ TorrentExporter::traceTorrentChangedProperties(
             wasChanged = true;
         };
 
-        recordChangedProperty(QStringLiteral("name"), changed, torrentUpdated->name(),
+        recordChangedProperty(QStringLiteral("name"), changed,
+                              torrentUpdated->name(),
                               torrentDb.value("name").toString());
-        recordChangedProperty(QStringLiteral("progress"), changed, progressString(torrentUpdated->progress()).toInt(),
+        recordChangedProperty(QStringLiteral("progress"), changed,
+                              progressString(torrentUpdated->progress()).toInt(),
                               torrentDb.value("progress").toInt());
-        recordChangedProperty(QStringLiteral("eta"), changed, torrentUpdated->eta(),
+        recordChangedProperty(QStringLiteral("eta"), changed,
+                              torrentUpdated->eta(),
                               torrentDb.value("eta").toLongLong());
-        recordChangedProperty(QStringLiteral("size"), changed, torrentUpdated->totalSize(),
+        recordChangedProperty(QStringLiteral("size"), changed,
+                              torrentUpdated->totalSize(),
                               torrentDb.value("size").toLongLong());
-        recordChangedProperty(QStringLiteral("seeds"), changed, torrentUpdated->seedsCount(),
+        recordChangedProperty(QStringLiteral("seeds"), changed,
+                              torrentUpdated->seedsCount(),
                               torrentDb.value("seeds").toInt());
-        recordChangedProperty(QStringLiteral("total_seeds"), changed, torrentUpdated->totalSeedsCount(),
+        recordChangedProperty(QStringLiteral("total_seeds"), changed,
+                              torrentUpdated->totalSeedsCount(),
                               torrentDb.value("total_seeds").toInt());
-        recordChangedProperty(QStringLiteral("leechers"), changed, torrentUpdated->leechsCount(),
+        recordChangedProperty(QStringLiteral("leechers"), changed,
+                              torrentUpdated->leechsCount(),
                               torrentDb.value("leechers").toInt());
-        recordChangedProperty(QStringLiteral("total_leechers"), changed, torrentUpdated->totalLeechersCount(),
+        recordChangedProperty(QStringLiteral("total_leechers"), changed,
+                              torrentUpdated->totalLeechersCount(),
                               torrentDb.value("total_leechers").toInt());
-        recordChangedProperty(QStringLiteral("remaining"), changed, torrentUpdated->incompletedSize(),
+        recordChangedProperty(QStringLiteral("remaining"), changed,
+                              torrentUpdated->incompletedSize(),
                               torrentDb.value("remaining").toLongLong());
-        recordChangedProperty(QStringLiteral("status"), changed, statusHash[torrentUpdated->state()].text,
+        recordChangedProperty(QStringLiteral("status"), changed,
+                              statusHash[torrentUpdated->state()].text,
                               torrentDb.value("status").toString());
 
         ++itTorrentsHash;
@@ -1272,12 +1306,12 @@ TorrentExporter::traceTorrentFilesChangedProperties(
             continue;
         /*! Torrent files from db as QSqlRecords QHash. */
         const auto torrentFilesInDb = *torrentsFilesInDb.value(torrentId);
-        const auto torrentFilesChangedProperties = new TorrentFilesChangedHash;
+        auto *const torrentFilesChangedProperties = new TorrentFilesChangedHash;
 
         for (const auto &torrentFileDb : torrentFilesInDb) {
             // Determine if torrent properties was changed
             auto changed = false;
-            const auto torrentFileChangedProperties = new TorrentFileChangedProperties;
+            auto *const torrentFileChangedProperties = new TorrentFileChangedProperties;
 
             const auto fileIndex = torrentFileDb.value("file_index").toInt();
 
@@ -1317,11 +1351,6 @@ TorrentExporter::traceTorrentFilesChangedProperties(
     }
 
     return result;
-}
-
-void TorrentExporter::setQMediaHwnd(const HWND hwnd)
-{
-    m_qMediaHwnd = hwnd;
 }
 
 uint BitTorrent::qHash(const BitTorrent::TorrentStatus &torrentStatus, const uint seed)

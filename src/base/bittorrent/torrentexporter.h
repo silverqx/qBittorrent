@@ -44,29 +44,36 @@ namespace BitTorrent
         Q_DISABLE_COPY(TorrentExporter)
 
     public:
-        // TODO move this to private section silverqx
-        // Like this:
-//    private:
-//        Logger();
-//        ~Logger() = default;
-        TorrentExporter();
-        ~TorrentExporter() override;
+        typedef quint64 TorrentId;
+        typedef QHash<TorrentId, const TorrentHandle *> TorrentHandleByIdHash;
+        typedef QHash<InfoHash, const TorrentHandle *> TorrentHandleByInfoHashHash;
 
         static void initInstance();
         static void freeInstance();
         static TorrentExporter *instance();
 
-        typedef quint64 TorrentId;
-        typedef QHash<TorrentId, const TorrentHandle *> TorrentHandleByIdHash;
-        typedef QHash<InfoHash, const TorrentHandle *> TorrentHandleByInfoHashHash;
-
-        void setQMediaHwnd(const HWND hwnd);
-        inline void setQMediaWindowActive(const bool active)
-        { m_qMediaWindowActive = active; }
+        inline void setQMediaHwnd(const HWND hwnd) noexcept
+        { m_qMediaHwnd = hwnd; };
+        inline void setQMediaWindowActive(const bool active) noexcept
+        { m_qMediaWindowActive = active; };
 
     private:
+        typedef quint64 TorrentFileId;
+        typedef QHash<TorrentId, QSqlRecord> TorrentSqlRecordByIdHash;
+        typedef qint32 TorrentFileIndex;
+        typedef QHash<TorrentId, QHash<TorrentFileIndex, QSqlRecord> *>
+                TorrentFileSqlRecordByIdHash;
+        typedef QVariantHash TorrentChangedProperties;
+        typedef QHash<TorrentId, const TorrentChangedProperties *> TorrentsChangedHash;
+        typedef QVariantHash TorrentFileChangedProperties;
+        typedef QHash<TorrentFileId, const TorrentFileChangedProperties *> TorrentFilesChangedHash;
+        typedef QHash<TorrentId, const TorrentFilesChangedHash *> TorrentsFilesChangedHash;
+
+        TorrentExporter();
+        ~TorrentExporter() override;
+
         QSqlDatabase connectToDb() const;
-        void removeTorrentFromDb(InfoHash infoHash) const;
+        void removeTorrentFromDb(const InfoHash &infoHash) const;
         void insertTorrentsToDb() const;
         /*! Remove already existing torrents in DB from commit hash. */
         void removeExistingTorrents();
@@ -75,20 +82,12 @@ namespace BitTorrent
             torrent handles mapped by torrent ids. Used only during torrent added alert. */
         TorrentHandleByIdHash
         selectTorrentIdsToCommitByHashes(const QList<InfoHash> &hashes) const;
-
-        typedef quint64 TorrentFileId;
-        typedef QHash<TorrentId, QSqlRecord> TorrentSqlRecordByIdHash;
-
         TorrentHandleByIdHash
         mapTorrentHandleById(const TorrentHandleByInfoHashHash &torrents) const;
         std::tuple<const TorrentHandleByIdHash, const TorrentSqlRecordByIdHash>
         selectTorrentsByHandles(
                 const TorrentHandleByInfoHashHash &torrents,
                 const QString &select = "id, hash") const;
-
-        typedef qint32 TorrentFileIndex;
-        typedef QHash<TorrentId, QHash<TorrentFileIndex, QSqlRecord> *> TorrentFileSqlRecordByIdHash;
-
         TorrentExporter::TorrentFileSqlRecordByIdHash
         selectTorrentsFilesByHandles(const TorrentHandleByIdHash &torrentsUpdated) const;
         QHash<TorrentId, InfoHash>
@@ -100,12 +99,6 @@ namespace BitTorrent
         /*! Update torrent storage location in DB, after torrent was moved ( storage path changed ). */
         void updateTorrentSaveDirInDb(TorrentId torrentId, const QString &newPath,
                                       const QString &torrentName) const;
-
-        typedef QVariantHash TorrentChangedProperties;
-        typedef QHash<TorrentId, const TorrentChangedProperties *> TorrentsChangedHash;
-        typedef QVariantHash TorrentFileChangedProperties;
-        typedef QHash<TorrentFileId, const TorrentFileChangedProperties *> TorrentFilesChangedHash;
-        typedef QHash<TorrentId, const TorrentFilesChangedHash *> TorrentsFilesChangedHash;
         void updateTorrentsInDb(
                 const TorrentsChangedHash &torrentsChangedHash,
                 const TorrentsFilesChangedHash &torrentsFilesChangedHash) const;
@@ -131,8 +124,8 @@ namespace BitTorrent
                 const TorrentHandleByIdHash &torrentsUpdated,
                 const TorrentFileSqlRecordByIdHash &torrentsFilesInDb) const;
 
-        TorrentHandleByInfoHashHash *m_torrentsToCommit;
-        QTimer *m_dbCommitTimer;
+        TorrentHandleByInfoHashHash *m_torrentsToCommit = nullptr;
+        QTimer *m_dbCommitTimer = nullptr;
         QSqlDatabase m_db;
         HWND m_qMediaHwnd = nullptr;
         bool m_qMediaWindowActive = false;
@@ -144,7 +137,7 @@ namespace BitTorrent
         void handleTorrentDeleted(BitTorrent::InfoHash infoHash) const;
         void commitTorrentsTimerTimeout();
         void handleTorrentsUpdated(const QVector<BitTorrent::TorrentHandle *> &torrents);
-        void handleTorrentStorageMoveFinished(BitTorrent::TorrentHandle *const torrent,
+        void handleTorrentStorageMoveFinished(const BitTorrent::TorrentHandle *const torrent,
                                               const QString &newPath) const;
     };
 
