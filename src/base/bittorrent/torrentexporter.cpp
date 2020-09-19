@@ -106,8 +106,8 @@ namespace {
 #  ifdef QT_DEBUG
 #    define PARSE_EXECUTED_QUERY(query) parseExecutedQuery(query)
 #  else
-#    define PARSE_EXECUTED_QUERY(query)
-            QStringLiteral("PARSE_EXECUTED_QUERY() macro enabled only in QT_DEBUG mode.")
+#    define PARSE_EXECUTED_QUERY(query) \
+        "PARSE_EXECUTED_QUERY() macro enabled only in QT_DEBUG mode."
 #  endif
 #endif
 
@@ -1055,7 +1055,7 @@ void TorrentExporter::updateTorrentInDb(
 #if LOG_CHANGED_TORRENTS
     qDebug() << "Number of updated torrents :"
              << query.numRowsAffected();
-    logExecutedQuery(query);
+    LOG_EXECUTED_QUERY(query);
 #endif
 
     if (!ok)
@@ -1125,7 +1125,7 @@ void TorrentExporter::updatePreviewableFilesInDb(
 #if LOG_CHANGED_TORRENTS
         qDebug("Number of updated torrent(ID%llu) files : %d",
                torrentId, query.numRowsAffected());
-        logExecutedQuery(query);
+        LOG_EXECUTED_QUERY(query);
 #endif
 
         if (!ok)
