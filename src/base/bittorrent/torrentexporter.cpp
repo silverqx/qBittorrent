@@ -406,42 +406,25 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     if (previewableTorrents.size() == 0)
         return;
 
-    // Create torrents hash keyed by torrent id, it's selected from db by torrent info hashes.
-    // Needed because torrent id is needed in update query.
-    // Also return actual QSqlRecords keyed by torrent id, which are needed to trace changed
-    // properties.
-    const auto [torrentsUpdated, torrentsInDb] =
-            selectTorrentsByHandles(previewableTorrents, QStringLiteral("*"));
-    // Nothing to update
-    if (torrentsUpdated.size() == 0) {
-        qDebug() << "Selected torrents by handles count is 0, in handleTorrentsUpdated(), "
-                    "this should never have happen :/";
-        return;
-    }
-    // Create torrent files hash populated with the QSqlRecords keyed by torrent ids.
-    // Needed to trace property changes in a torrent previewable files.
-    const auto torrentsFilesInDb = selectTorrentsFilesByHandles(torrentsUpdated);
-
-    // Find out changed properties in torrent and torrent files
-    const auto torrentChangedProperties =
-            traceTorrentChangedProperties(torrentsUpdated, torrentsInDb);
-    const auto torrentsFilesChangedProperties =
-            traceTorrentFilesChangedProperties(torrentsUpdated, torrentsFilesInDb);
-    // Nothing to update
-    if (torrentChangedProperties.isEmpty() && torrentsFilesChangedProperties.isEmpty())
-        return;
-
-    auto db = QSqlDatabase::database();
-    // Use transaction to guarantee data integrity
-    db.transaction();
     try {
-        // Multi update of torrents and previewable files
-        updateTorrentsInDb(torrentChangedProperties, torrentsFilesChangedProperties);
-        db.commit();
-    }  catch (const ExporterError &e) {
-        db.rollback();
-        qCritical() << "Critical in handleTorrentsUpdated() :"
-                    << e.what();
+        const auto [torrentChangedProperties, torrentsFilesChangedProperties] =
+                getTorrentsChangedProperties(previewableTorrents);
+
+        auto db = QSqlDatabase::database();
+        // Use transaction to guarantee data integrity
+        db.transaction();
+        try {
+            // Multi update of torrents and previewable files
+            updateTorrentsInDb(torrentChangedProperties, torrentsFilesChangedProperties);
+            db.commit();
+        }  catch (const ExporterError &e) {
+            db.rollback();
+            qCritical() << "Critical in handleTorrentsUpdated() :"
+                        << e.what();
+            return;
+        }
+
+    }  catch (const NothingToUpdateError &) {
         return;
     }
 
@@ -1182,6 +1165,40 @@ void TorrentExporter::updateTorrentSaveDirInDb(const TorrentId torrentId, const 
     }
 }
 
+std::tuple<TorrentExporter::TorrentsChangedHash,
+           TorrentExporter::TorrentsFilesChangedHash>
+TorrentExporter::getTorrentsChangedProperties(
+        const TorrentHandleByInfoHashHash &torrents) const
+{
+    // Create torrents hash keyed by torrent id, it's selected from db by torrent info hashes.
+    // Needed because torrent id is needed in update query.
+    // Also return actual QSqlRecords keyed by torrent id, which are needed to trace changed
+    // properties.
+    const auto [torrentsUpdated, torrentsInDb] =
+            selectTorrentsByHandles(torrents, QStringLiteral("*"));
+    // Nothing to update
+    if (torrentsUpdated.size() == 0) {
+        qDebug() << "Selected torrents by handles count is 0, in handleTorrentsUpdated(), "
+                    "this should never have happen :/";
+        throw NothingToUpdateError();
+    }
+
+    // Create torrent files hash populated with the QSqlRecords keyed by torrent ids.
+    // Needed to trace property changes in a torrent previewable files.
+    const auto torrentsFilesInDb = selectTorrentsFilesByHandles(torrentsUpdated);
+
+    // Find out changed properties in torrent and torrent files
+    const auto torrentChangedProperties =
+            traceTorrentChangedProperties(torrentsUpdated, torrentsInDb);
+    const auto torrentsFilesChangedProperties =
+            traceTorrentFilesChangedProperties(torrentsUpdated, torrentsFilesInDb);
+    // Nothing to update
+    if (torrentChangedProperties.isEmpty() && torrentsFilesChangedProperties.isEmpty())
+        throw NothingToUpdateError();
+
+    return {torrentChangedProperties, torrentsFilesChangedProperties};
+}
+
 TorrentExporter::TorrentsChangedHash
 TorrentExporter::traceTorrentChangedProperties(
         const TorrentHandleByIdHash &torrentsUpdated,
@@ -1290,7 +1307,7 @@ TorrentExporter::traceTorrentFilesChangedProperties(
         const auto torrentFilesChangedProperties =
                 QSharedPointer<TorrentFilesChangedHash>::create();
 
-        for (const auto &torrentFileDb : *torrentFilesInDb) {
+        for (const auto &torrentFileDb : qAsConst(*torrentFilesInDb)) {
             // Determine if torrent properties was changed
             auto changed = false;
             const auto torrentFileChangedProperties =

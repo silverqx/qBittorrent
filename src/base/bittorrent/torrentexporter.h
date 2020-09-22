@@ -20,6 +20,16 @@ namespace BitTorrent
         {}
     };
 
+    /*! Any data to update in DB.
+        Used as predictable error, to fastly return from method without return value. */
+    class NothingToUpdateError final : public std::logic_error
+    {
+    public:
+        inline NothingToUpdateError()
+            : std::logic_error("")
+        {}
+    };
+
     // Starts from 1 because of MySQL enums starts from 1
     enum struct TorrentStatus
     {
@@ -104,6 +114,9 @@ namespace BitTorrent
             changed ). */
         void updateTorrentSaveDirInDb(TorrentId torrentId, const QString &newPath,
                                       const QString &torrentName) const;
+        std::tuple<TorrentExporter::TorrentsChangedHash,
+                   TorrentExporter::TorrentsFilesChangedHash>
+        getTorrentsChangedProperties(const TorrentHandleByInfoHashHash &torrents) const;
         void updateTorrentsInDb(
                 const TorrentsChangedHash &torrentsChangedHash,
                 const TorrentsFilesChangedHash &torrentsFilesChangedHash) const;
