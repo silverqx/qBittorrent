@@ -272,9 +272,10 @@ TorrentExporter::TorrentExporter()
     : m_torrentsToCommit(
           QScopedPointer<TorrentHandleByInfoHashHash>(new TorrentHandleByInfoHashHash))
     , m_dbCommitTimer(new QTimer(this))
-    , m_db(connectToDb())
 {
     l_torrentExporter = this;
+
+    connectToDb();
 
     // Initialize the commit timer for added torrents
     m_dbCommitTimer->setInterval(COMMIT_INTERVAL);
@@ -372,15 +373,16 @@ void TorrentExporter::commitTorrentsTimerTimeout()
     // it has its drawbacks.
     // If one of the insert queries fail, exception is throwed and data will be rollback-ed.
     // TODO use transaction with savepoints, like in a update strategy silverqx
-    m_db.transaction();
+    auto db = QSqlDatabase::database();
+    db.transaction();
     try {
         // Multi insert for torrents
         insertTorrentsToDb();
         // Multi insert for previewable torrent files
         insertPreviewableFilesToDb();
-        m_db.commit();
+        db.commit();
     }  catch (const ExporterError &e) {
-        m_db.rollback();
+        db.rollback();
         qCritical() << "Critical in commitTorrentsTimerTimeout() :"
                     << e.what();
         return;
@@ -429,14 +431,15 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     if (torrentChangedProperties.isEmpty() && torrentsFilesChangedProperties.isEmpty())
         return;
 
+    auto db = QSqlDatabase::database();
     // Use transaction to guarantee data integrity
-    m_db.transaction();
+    db.transaction();
     try {
         // Multi update of torrents and previewable files
         updateTorrentsInDb(torrentChangedProperties, torrentsFilesChangedProperties);
-        m_db.commit();
+        db.commit();
     }  catch (const ExporterError &e) {
-        m_db.rollback();
+        db.rollback();
         qCritical() << "Critical in handleTorrentsUpdated() :"
                     << e.what();
         return;
@@ -489,7 +492,7 @@ void TorrentExporter::handleTorrentStorageMoveFinished(
     ::IpcSendInfoHash(m_qMediaHwnd, ::MSG_QBT_TORRENT_MOVED, infoHash);
 }
 
-QSqlDatabase TorrentExporter::connectToDb() const
+void TorrentExporter::connectToDb() const
 {
     auto db = QSqlDatabase::addDatabase("QMYSQL");
     db.setHostName("127.0.0.1");
@@ -501,12 +504,11 @@ QSqlDatabase TorrentExporter::connectToDb() const
     db.setUserName("szachara");
     db.setPassword("99delfinu*");
 
-    const auto ok = db.open();
-    if (!ok)
-        qDebug() << "Connect to DB failed :"
-                 << db.lastError().text();
+    if (db.open())
+        return;
 
-    return db;
+    qDebug() << "Connect to DB failed :"
+             << db.lastError().text();
 }
 
 void TorrentExporter::removeTorrentFromDb(const InfoHash &infoHash) const

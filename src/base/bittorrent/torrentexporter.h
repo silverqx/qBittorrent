@@ -75,7 +75,7 @@ namespace BitTorrent
         TorrentExporter();
         ~TorrentExporter() override;
 
-        QSqlDatabase connectToDb() const;
+        void connectToDb() const;
         void removeTorrentFromDb(const InfoHash &infoHash) const;
         void insertTorrentsToDb() const;
         /*! Remove already existing torrents in DB from commit hash. */
@@ -131,7 +131,6 @@ namespace BitTorrent
 
         QScopedPointer<TorrentHandleByInfoHashHash> m_torrentsToCommit;
         QPointer<QTimer> m_dbCommitTimer;
-        QSqlDatabase m_db;
         HWND m_qMediaHwnd = nullptr;
         bool m_qMediaWindowActive = false;
 
