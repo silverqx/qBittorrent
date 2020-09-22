@@ -268,11 +268,9 @@ namespace {
 
 TorrentExporter *TorrentExporter::m_instance = nullptr;
 
-// TODO investigate default ctor in cpp file silverqx
-//Preferences::Preferences() = default;
-
 TorrentExporter::TorrentExporter()
-    : m_torrentsToCommit(new TorrentHandleByInfoHashHash)
+    : m_torrentsToCommit(
+          QScopedPointer<TorrentHandleByInfoHashHash>(new TorrentHandleByInfoHashHash))
     , m_dbCommitTimer(new QTimer(this))
     , m_db(connectToDb())
 {
@@ -309,8 +307,6 @@ TorrentExporter::~TorrentExporter()
 
     if (m_qMediaHwnd != nullptr)
         ::PostMessage(m_qMediaHwnd, ::MSG_QBITTORRENT_DOWN, NULL, NULL);
-
-    delete m_torrentsToCommit;
 }
 
 void TorrentExporter::initInstance()
@@ -433,25 +429,6 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     if (torrentChangedProperties.isEmpty() && torrentsFilesChangedProperties.isEmpty())
         return;
 
-    const auto freeTorrentFilesInDb =
-            [&torrentsFilesInDb]
-    {
-        for (const auto *const torrentFilesInDb : torrentsFilesInDb)
-            delete torrentFilesInDb;
-    };
-
-    const auto freeChangedProperties =
-            [&torrentChangedProperties, &torrentsFilesChangedProperties]
-    {
-        for (const auto *const torrentChangedPropertiesVal : torrentChangedProperties)
-            delete torrentChangedPropertiesVal;
-        for (const auto *const torrentFilesChangedProperties : torrentsFilesChangedProperties) {
-            for (const auto *const torrentFileChangedProperties : *torrentFilesChangedProperties)
-                delete torrentFileChangedProperties;
-            delete torrentFilesChangedProperties;
-        }
-    };
-
     // Use transaction to guarantee data integrity
     m_db.transaction();
     try {
@@ -460,16 +437,10 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
         m_db.commit();
     }  catch (const ExporterError &e) {
         m_db.rollback();
-        freeChangedProperties();
-        freeTorrentFilesInDb();
         qCritical() << "Critical in handleTorrentsUpdated() :"
                     << e.what();
         return;
     }
-
-    // TODO again missing finally block silverqx
-    freeChangedProperties();
-    freeTorrentFilesInDb();
 
     // Don't send message updates about torrents changed, when the qMedia is not in foreground
     if (m_qMediaHwnd == nullptr || m_qMediaWindowActive == false)
@@ -815,7 +786,8 @@ TorrentExporter::selectTorrentsByHandles(
     auto placeholders = QStringLiteral("?, ").repeated(torrents.size());
     // Will never be empty, is checked earlier
     placeholders.chop(2);
-    // Qt don't know how to iterate result with json column, so I have to manually manager select
+    /* Qt don't know how to iterate result with json column, so I have to manually manage
+       columns to select. */
     const auto selectManaged = select == '*'
                                ? QStringLiteral("id, name, progress, eta, size, seeds, "
                                                 "total_seeds, leechers, total_leechers, "
@@ -901,12 +873,12 @@ TorrentExporter::selectTorrentsFilesByHandles(const TorrentHandleByIdHash &torre
     TorrentFileSqlRecordByIdHash torrentFilesInDb;
     while (query.next()) {
         const auto torrentId = query.value("torrent_id").toULongLong();
-        QHash<TorrentFileIndex, QSqlRecord> *torrentFiles;
+        QSharedPointer<QHash<TorrentFileIndex, QSqlRecord>> torrentFiles;
         // Obtain existing or create new hash if doesn't exist
         if (torrentFilesInDb.contains(torrentId))
             torrentFiles = torrentFilesInDb.value(torrentId);
         else
-            torrentFiles = new QHash<TorrentFileIndex, QSqlRecord>;
+            torrentFiles.reset(new QHash<TorrentFileIndex, QSqlRecord>);
         torrentFiles->insert(
                     query.value("file_index").toInt(),
                     query.record());
@@ -1021,7 +993,7 @@ void TorrentExporter::updateTorrentsInDb(
 
 void TorrentExporter::updateTorrentInDb(
         const TorrentId torrentId,
-        const TorrentChangedProperties *const changedProperties
+        const QSharedPointer<const TorrentChangedProperties> changedProperties
 ) const
 {
     // Nothing to update
@@ -1071,15 +1043,15 @@ void TorrentExporter::updateTorrentInDb(
 
 #if LOG_CHANGED_TORRENTS
 void TorrentExporter::updatePreviewableFilesInDb(
-        const TorrentFilesChangedHash *const changedFilesProperties,
+        const QSharedPointer<const TorrentFilesChangedHash> changedFilesProperties,
         const TorrentId torrentId) const
 #else
 void TorrentExporter::updatePreviewableFilesInDb(
-        const TorrentFilesChangedHash *const changedFilesProperties) const
+        const QSharedPointer<const TorrentFilesChangedHash> changedFilesProperties) const
 #endif
 {
     // Handle nullptr
-    if (changedFilesProperties == nullptr)
+    if (changedFilesProperties.isNull())
         throw ExporterError("'changedFilesProperties == nullptr' in "
                             "updatePreviewableFilesInDb().");
     // Nothing to update
@@ -1109,9 +1081,11 @@ void TorrentExporter::updatePreviewableFilesInDb(
         updateSetBindings.chop(2);
 
         // Create query
-        const auto updateTorrentQuery = QStringLiteral("UPDATE torrents_previewable_files SET %1 "
-                                                       "WHERE id = ?")
-                                        .arg(updateSetBindings);
+        const auto updateTorrentQuery =
+                QStringLiteral("UPDATE torrents_previewable_files SET %1 "
+                               "WHERE id = ?")
+                .arg(updateSetBindings);
+
         QSqlQuery query;
         query.prepare(updateTorrentQuery);
 
@@ -1220,7 +1194,7 @@ TorrentExporter::traceTorrentChangedProperties(
         const auto torrentId = itTorrentsHash.key();
         /*! Torrent from db as QSqlRecord. */
         const auto torrentDb = torrentsInDb[torrentId];
-        auto *const torrentChangedProperties = new QVariantHash;
+        const auto torrentChangedProperties = QSharedPointer<QVariantHash>::create();
 
         // Determine if torrent properties was changed
         auto changed = false;
@@ -1270,10 +1244,8 @@ TorrentExporter::traceTorrentChangedProperties(
         ++itTorrentsHash;
 
         // All properties are the same
-        if (!changed) {
-            delete torrentChangedProperties;
+        if (!changed)
             continue;
-        }
 
         result.insert(torrentId, torrentChangedProperties);
     }
@@ -1311,14 +1283,16 @@ TorrentExporter::traceTorrentFilesChangedProperties(
                    "no files in torrentsFilesInDb");
         if (!filesExist)
             continue;
-        /*! Torrent files from db as QSqlRecords QHash. */
-        const auto torrentFilesInDb = *torrentsFilesInDb.value(torrentId);
-        auto *const torrentFilesChangedProperties = new TorrentFilesChangedHash;
+        /*! Torrent files from db as QSqlRecords QHash ( QSharedPointer ). */
+        const auto torrentFilesInDb = torrentsFilesInDb.value(torrentId);
+        const auto torrentFilesChangedProperties =
+                QSharedPointer<TorrentFilesChangedHash>::create();
 
-        for (const auto &torrentFileDb : torrentFilesInDb) {
+        for (const auto &torrentFileDb : *torrentFilesInDb) {
             // Determine if torrent properties was changed
             auto changed = false;
-            auto *const torrentFileChangedProperties = new TorrentFileChangedProperties;
+            const auto torrentFileChangedProperties =
+                    QSharedPointer<TorrentFileChangedProperties>::create();
 
             const auto fileIndex = torrentFileDb.value("file_index").toInt();
 
@@ -1336,10 +1310,8 @@ TorrentExporter::traceTorrentFilesChangedProperties(
                                   torrentFileDb.value("progress").toInt());
 
             // All properties are the same
-            if (!changed) {
-                delete torrentFileChangedProperties;
+            if (!changed)
                 continue;
-            }
 
             torrentFilesChangedProperties->insert(
                         torrentFileDb.value("id").toULongLong(),
@@ -1349,10 +1321,8 @@ TorrentExporter::traceTorrentFilesChangedProperties(
         ++itTorrentsHash;
 
         // Nothing to update
-        if (torrentFilesChangedProperties->isEmpty()) {
-            delete torrentFilesChangedProperties;
+        if (torrentFilesChangedProperties->isEmpty())
             continue;
-        }
 
         result.insert(torrentId, torrentFilesChangedProperties);
     }

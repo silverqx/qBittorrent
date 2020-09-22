@@ -61,13 +61,16 @@ namespace BitTorrent
         typedef quint64 TorrentFileId;
         typedef QHash<TorrentId, QSqlRecord> TorrentSqlRecordByIdHash;
         typedef qint32 TorrentFileIndex;
-        typedef QHash<TorrentId, QHash<TorrentFileIndex, QSqlRecord> *>
+        typedef QHash<TorrentId, QSharedPointer<QHash<TorrentFileIndex, QSqlRecord>>>
                 TorrentFileSqlRecordByIdHash;
         typedef QVariantHash TorrentChangedProperties;
-        typedef QHash<TorrentId, const TorrentChangedProperties *> TorrentsChangedHash;
+        typedef QHash<TorrentId, QSharedPointer<const TorrentChangedProperties>>
+                TorrentsChangedHash;
         typedef QVariantHash TorrentFileChangedProperties;
-        typedef QHash<TorrentFileId, const TorrentFileChangedProperties *> TorrentFilesChangedHash;
-        typedef QHash<TorrentId, const TorrentFilesChangedHash *> TorrentsFilesChangedHash;
+        typedef QHash<TorrentFileId, QSharedPointer<const TorrentFileChangedProperties>>
+                TorrentFilesChangedHash;
+        typedef QHash<TorrentId, QSharedPointer<const TorrentFilesChangedHash>>
+                TorrentsFilesChangedHash;
 
         TorrentExporter();
         ~TorrentExporter() override;
@@ -94,9 +97,11 @@ namespace BitTorrent
         selectTorrentsByStatuses(const QList<TorrentStatus> &statuses) const;
         /*! Needed when qBittorrent is closed, to fix torrent downloading statuses. */
         void correctTorrentStatusesOnExit() const;
-        /*! Needed when qBittorrent is closed, to set seeds, total_seeds, leechers and total_leechers to 0. */
+        /*! Needed when qBittorrent is closed, to set seeds, total_seeds, leechers and
+            total_leechers to 0. */
         void correctTorrentPeersOnExit() const;
-        /*! Update torrent storage location in DB, after torrent was moved ( storage path changed ). */
+        /*! Update torrent storage location in DB, after torrent was moved ( storage path
+            changed ). */
         void updateTorrentSaveDirInDb(TorrentId torrentId, const QString &newPath,
                                       const QString &torrentName) const;
         void updateTorrentsInDb(
@@ -104,14 +109,14 @@ namespace BitTorrent
                 const TorrentsFilesChangedHash &torrentsFilesChangedHash) const;
         void updateTorrentInDb(
                 TorrentId torrentId,
-                const TorrentChangedProperties *const changedProperties) const;
+                const QSharedPointer<const TorrentChangedProperties> changedProperties) const;
 #if LOG_CHANGED_TORRENTS
         void updatePreviewableFilesInDb(
-                const TorrentFilesChangedHash *const changedFilesProperties,
+                const QSharedPointer<const TorrentFilesChangedHash> changedFilesProperties,
                 TorrentId torrentId) const;
 #else
         void updatePreviewableFilesInDb(
-                const TorrentFilesChangedHash *const changedFilesProperties) const;
+                const QSharedPointer<const TorrentFilesChangedHash> changedFilesProperties) const;
 #endif
         /*! Find out changed properties in updated torrents. */
         TorrentExporter::TorrentsChangedHash
@@ -124,8 +129,8 @@ namespace BitTorrent
                 const TorrentHandleByIdHash &torrentsUpdated,
                 const TorrentFileSqlRecordByIdHash &torrentsFilesInDb) const;
 
-        TorrentHandleByInfoHashHash *m_torrentsToCommit = nullptr;
-        QTimer *m_dbCommitTimer = nullptr;
+        QScopedPointer<TorrentHandleByInfoHashHash> m_torrentsToCommit;
+        QPointer<QTimer> m_dbCommitTimer;
         QSqlDatabase m_db;
         HWND m_qMediaHwnd = nullptr;
         bool m_qMediaWindowActive = false;
