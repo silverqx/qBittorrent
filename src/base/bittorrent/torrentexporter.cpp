@@ -398,7 +398,6 @@ void TorrentExporter::commitTorrentsTimerTimeout()
 
 void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torrents)
 {
-    // TODO don't update db so often, when qMedia is not up silverqx
     // TODO DB connection check also here silverqx
     // Filter out non previewable torrents
     const auto previewableTorrents = filterPreviewableTorrents(torrents);
