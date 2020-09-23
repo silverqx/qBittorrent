@@ -406,25 +406,27 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
     if (previewableTorrents.size() == 0)
         return;
 
+    // Define hashes here and pass them to the fill method that fills them.
+    // I tried std::optional() / std::tuple(), nothing worked good, this is the best solution.
+    TorrentsChangedHash torrentsChangedProperties;
+    TorrentsFilesChangedHash torrentsFilesChangedProperties;
+    // Nothing to update
+    if (!fillTorrentsChangedProperties(previewableTorrents,
+                                       torrentsChangedProperties,
+                                       torrentsFilesChangedProperties))
+        return;
+
+    auto db = QSqlDatabase::database();
+    // Use transaction to guarantee data integrity
+    db.transaction();
     try {
-        const auto [torrentChangedProperties, torrentsFilesChangedProperties] =
-                getTorrentsChangedProperties(previewableTorrents);
-
-        auto db = QSqlDatabase::database();
-        // Use transaction to guarantee data integrity
-        db.transaction();
-        try {
-            // Multi update of torrents and previewable files
-            updateTorrentsInDb(torrentChangedProperties, torrentsFilesChangedProperties);
-            db.commit();
-        }  catch (const ExporterError &e) {
-            db.rollback();
-            qCritical() << "Critical in handleTorrentsUpdated() :"
-                        << e.what();
-            return;
-        }
-
-    }  catch (const NothingToUpdateError &) {
+        // Multi update of torrents and previewable files
+        updateTorrentsInDb(torrentsChangedProperties, torrentsFilesChangedProperties);
+        db.commit();
+    }  catch (const ExporterError &e) {
+        db.rollback();
+        qCritical() << "Critical in handleTorrentsUpdated() :"
+                    << e.what();
         return;
     }
 
@@ -1165,10 +1167,11 @@ void TorrentExporter::updateTorrentSaveDirInDb(const TorrentId torrentId, const 
     }
 }
 
-std::tuple<TorrentExporter::TorrentsChangedHash,
-           TorrentExporter::TorrentsFilesChangedHash>
-TorrentExporter::getTorrentsChangedProperties(
-        const TorrentHandleByInfoHashHash &torrents) const
+bool TorrentExporter::fillTorrentsChangedProperties(
+        const TorrentHandleByInfoHashHash &torrents,
+        TorrentsChangedHash &torrentsChangedProperties,
+        TorrentsFilesChangedHash &torrentsFilesChangedProperties
+) const
 {
     // Create torrents hash keyed by torrent id, it's selected from db by torrent info hashes.
     // Needed because torrent id is needed in update query.
@@ -1180,7 +1183,7 @@ TorrentExporter::getTorrentsChangedProperties(
     if (torrentsUpdated.size() == 0) {
         qDebug() << "Selected torrents by handles count is 0, in handleTorrentsUpdated(), "
                     "this should never have happen :/";
-        throw NothingToUpdateError();
+        return false;
     }
 
     // Create torrent files hash populated with the QSqlRecords keyed by torrent ids.
@@ -1188,24 +1191,23 @@ TorrentExporter::getTorrentsChangedProperties(
     const auto torrentsFilesInDb = selectTorrentsFilesByHandles(torrentsUpdated);
 
     // Find out changed properties in torrent and torrent files
-    const auto torrentChangedProperties =
-            traceTorrentChangedProperties(torrentsUpdated, torrentsInDb);
-    const auto torrentsFilesChangedProperties =
-            traceTorrentFilesChangedProperties(torrentsUpdated, torrentsFilesInDb);
+    traceTorrentChangedProperties(torrentsUpdated, torrentsInDb,
+                                  torrentsChangedProperties);
+    traceTorrentFilesChangedProperties(torrentsUpdated, torrentsFilesInDb,
+                                       torrentsFilesChangedProperties);
     // Nothing to update
-    if (torrentChangedProperties.isEmpty() && torrentsFilesChangedProperties.isEmpty())
-        throw NothingToUpdateError();
+    if (torrentsChangedProperties.isEmpty() && torrentsFilesChangedProperties.isEmpty())
+        return false;
 
-    return {torrentChangedProperties, torrentsFilesChangedProperties};
+    return true;
 }
 
-TorrentExporter::TorrentsChangedHash
-TorrentExporter::traceTorrentChangedProperties(
+void TorrentExporter::traceTorrentChangedProperties(
         const TorrentHandleByIdHash &torrentsUpdated,
-        const TorrentSqlRecordByIdHash &torrentsInDb
+        const TorrentSqlRecordByIdHash &torrentsInDb,
+        TorrentsChangedHash &torrentsChangedProperties
 ) const
 {
-    TorrentsChangedHash result;
     auto itTorrentsHash = torrentsUpdated.constBegin();
     while (itTorrentsHash != torrentsUpdated.constEnd()) {
         /*! Torrent sent by qBittorrent as changed. */
@@ -1266,16 +1268,14 @@ TorrentExporter::traceTorrentChangedProperties(
         if (!changed)
             continue;
 
-        result.insert(torrentId, torrentChangedProperties);
+        torrentsChangedProperties.insert(torrentId, torrentChangedProperties);
     }
-
-    return result;
 }
 
-TorrentExporter::TorrentsFilesChangedHash
-TorrentExporter::traceTorrentFilesChangedProperties(
+void TorrentExporter::traceTorrentFilesChangedProperties(
         const TorrentHandleByIdHash &torrentsUpdated,
-        const TorrentFileSqlRecordByIdHash &torrentsFilesInDb
+        const TorrentFileSqlRecordByIdHash &torrentsFilesInDb,
+        TorrentsFilesChangedHash &torrentsFilesChangedProperties
 ) const
 {
     // TODO consider move to anonym. namespace, because duplicate code is also in traceTorrentChangedProperties() silverqx
@@ -1289,7 +1289,6 @@ TorrentExporter::traceTorrentFilesChangedProperties(
         wasChanged = true;
     };
 
-    TorrentsFilesChangedHash result;
     auto itTorrentsHash = torrentsUpdated.constBegin();
     while (itTorrentsHash != torrentsUpdated.constEnd()) {
         /*! Torrent sent by qBittorrent as changed. */
@@ -1343,10 +1342,8 @@ TorrentExporter::traceTorrentFilesChangedProperties(
         if (torrentFilesChangedProperties->isEmpty())
             continue;
 
-        result.insert(torrentId, torrentFilesChangedProperties);
+        torrentsFilesChangedProperties.insert(torrentId, torrentFilesChangedProperties);
     }
-
-    return result;
 }
 
 uint BitTorrent::qHash(const BitTorrent::TorrentStatus &torrentStatus, const uint seed)

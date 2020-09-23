@@ -20,16 +20,6 @@ namespace BitTorrent
         {}
     };
 
-    /*! Any data to update in DB.
-        Used as predictable error, to fastly return from method without return value. */
-    class NothingToUpdateError final : public std::logic_error
-    {
-    public:
-        inline NothingToUpdateError()
-            : std::logic_error("")
-        {}
-    };
-
     // Starts from 1 because of MySQL enums starts from 1
     enum struct TorrentStatus
     {
@@ -114,9 +104,10 @@ namespace BitTorrent
             changed ). */
         void updateTorrentSaveDirInDb(TorrentId torrentId, const QString &newPath,
                                       const QString &torrentName) const;
-        std::tuple<TorrentExporter::TorrentsChangedHash,
-                   TorrentExporter::TorrentsFilesChangedHash>
-        getTorrentsChangedProperties(const TorrentHandleByInfoHashHash &torrents) const;
+        bool fillTorrentsChangedProperties(
+                const TorrentHandleByInfoHashHash &torrents,
+                TorrentsChangedHash &torrentsChangedProperties,
+                TorrentsFilesChangedHash &torrentsFilesChangedProperties) const;
         void updateTorrentsInDb(
                 const TorrentsChangedHash &torrentsChangedHash,
                 const TorrentsFilesChangedHash &torrentsFilesChangedHash) const;
@@ -132,15 +123,15 @@ namespace BitTorrent
                 const QSharedPointer<const TorrentFilesChangedHash> changedFilesProperties) const;
 #endif
         /*! Find out changed properties in updated torrents. */
-        TorrentExporter::TorrentsChangedHash
-        traceTorrentChangedProperties(
+        void traceTorrentChangedProperties(
                 const TorrentHandleByIdHash &torrentsUpdated,
-                const TorrentSqlRecordByIdHash &torrentsInDb) const;
+                const TorrentSqlRecordByIdHash &torrentsInDb,
+                TorrentsChangedHash &torrentsChangedProperties) const;
         /*! Find out changed properties in updated torrent files. */
-        TorrentExporter::TorrentsFilesChangedHash
-        traceTorrentFilesChangedProperties(
+        void traceTorrentFilesChangedProperties(
                 const TorrentHandleByIdHash &torrentsUpdated,
-                const TorrentFileSqlRecordByIdHash &torrentsFilesInDb) const;
+                const TorrentFileSqlRecordByIdHash &torrentsFilesInDb,
+                TorrentsFilesChangedHash &torrentsFilesChangedProperties) const;
 
         QScopedPointer<TorrentHandleByInfoHashHash> m_torrentsToCommit;
         QPointer<QTimer> m_dbCommitTimer;
