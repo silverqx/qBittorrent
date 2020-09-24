@@ -63,9 +63,9 @@
 
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
-#include "base/bittorrent/torrentexporter.h"
 #include "base/bittorrent/torrenthandle.h"
 #include "base/exceptions.h"
+#include "base/export/torrentexporter.h"
 #include "base/iconprovider.h"
 #include "base/logger.h"
 #include "base/net/downloadmanager.h"

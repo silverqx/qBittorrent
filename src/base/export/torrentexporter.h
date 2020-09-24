@@ -6,7 +6,7 @@
 #include <QtSql/QSqlDatabase>
 
 #include "base/bittorrent/infohash.h"
-#include "base/torrentexporterconfig.h"
+#include "base/export/torrentexporterconfig.h"
 
 namespace BitTorrent
 {

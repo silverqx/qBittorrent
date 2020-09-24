@@ -22,13 +22,14 @@ HEADERS += \
     $$PWD/bittorrent/speedmonitor.h \
     $$PWD/bittorrent/statistics.h \
     $$PWD/bittorrent/torrentcreatorthread.h \
-    $$PWD/bittorrent/torrentexporter.h \
     $$PWD/bittorrent/torrenthandle.h \
     $$PWD/bittorrent/torrenthandleimpl.h \
     $$PWD/bittorrent/torrentinfo.h \
     $$PWD/bittorrent/tracker.h \
     $$PWD/bittorrent/trackerentry.h \
     $$PWD/exceptions.h \
+    $$PWD/export/torrentexporter.h \
+    $$PWD/export/torrentexporterconfig.h \
     $$PWD/filesystemwatcher.h \
     $$PWD/global.h \
     $$PWD/http/connection.h \
@@ -68,7 +69,6 @@ HEADERS += \
     $$PWD/search/searchpluginmanager.h \
     $$PWD/settingsstorage.h \
     $$PWD/settingvalue.h \
-    $$PWD/torrentexporterconfig.h \
     $$PWD/torrentfileguard.h \
     $$PWD/torrentfilter.h \
     $$PWD/tristatebool.h \
@@ -104,13 +104,13 @@ SOURCES += \
     $$PWD/bittorrent/speedmonitor.cpp \
     $$PWD/bittorrent/statistics.cpp \
     $$PWD/bittorrent/torrentcreatorthread.cpp \
-    $$PWD/bittorrent/torrentexporter.cpp \
     $$PWD/bittorrent/torrenthandle.cpp \
     $$PWD/bittorrent/torrenthandleimpl.cpp \
     $$PWD/bittorrent/torrentinfo.cpp \
     $$PWD/bittorrent/tracker.cpp \
     $$PWD/bittorrent/trackerentry.cpp \
     $$PWD/exceptions.cpp \
+    $$PWD/export/torrentexporter.cpp \
     $$PWD/filesystemwatcher.cpp \
     $$PWD/http/connection.cpp \
     $$PWD/http/httperror.cpp \

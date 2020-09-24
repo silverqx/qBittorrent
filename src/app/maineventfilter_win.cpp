@@ -6,7 +6,7 @@
 
 #include "base/bittorrent/infohash.h"
 #include "base/bittorrent/session.h"
-#include "base/bittorrent/torrentexporter.h"
+#include "base/export/torrentexporter.h"
 #include "commonglobal.h"
 
 namespace
