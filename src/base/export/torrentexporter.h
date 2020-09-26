@@ -11,7 +11,10 @@
 namespace BitTorrent
 {
     class TorrentHandle;
+}
 
+namespace Export
+{
     class ExporterError final : public std::logic_error
     {
     public:
@@ -45,8 +48,9 @@ namespace BitTorrent
 
     public:
         typedef quint64 TorrentId;
-        typedef QHash<TorrentId, const TorrentHandle *> TorrentHandleByIdHash;
-        typedef QHash<InfoHash, const TorrentHandle *> TorrentHandleByInfoHashHash;
+        typedef QHash<TorrentId, const BitTorrent::TorrentHandle *> TorrentHandleByIdHash;
+        typedef QHash<BitTorrent::InfoHash, const BitTorrent::TorrentHandle *>
+                TorrentHandleByInfoHashHash;
 
         static void initInstance();
         static void freeInstance();
@@ -88,7 +92,7 @@ namespace BitTorrent
         ~TorrentExporter() override;
 
         void connectDatabase() const;
-        void removeTorrentFromDb(const InfoHash &infoHash) const;
+        void removeTorrentFromDb(const BitTorrent::InfoHash &infoHash) const;
         void insertTorrentsToDb() const;
         /*! Remove already existing torrents in DB from commit hash. */
         void removeExistingTorrents();
@@ -101,7 +105,7 @@ namespace BitTorrent
         /*! Select inserted torrent ids by InfoHash-es for a torrents to commit and return
             torrent handles mapped by torrent ids. Used only during torrent added alert. */
         TorrentHandleByIdHash
-        selectTorrentIdsToCommitByHashes(const QList<InfoHash> &hashes) const;
+        selectTorrentIdsToCommitByHashes(const QList<BitTorrent::InfoHash> &hashes) const;
         TorrentHandleByIdHash
         mapTorrentHandleById(const TorrentHandleByInfoHashHash &torrents) const;
         std::tuple<const TorrentHandleByIdHash, const TorrentSqlRecordByIdHash>
@@ -110,7 +114,7 @@ namespace BitTorrent
                 const QString &select = "id, hash") const;
         TorrentExporter::TorrentFileSqlRecordByIdHash
         selectTorrentsFilesByHandles(const TorrentHandleByIdHash &torrentsUpdated) const;
-        QHash<TorrentId, InfoHash>
+        QHash<TorrentId, BitTorrent::InfoHash>
         selectTorrentsByStatuses(const QList<TorrentStatus> &statuses) const;
         /*! Needed when qBittorrent is closed, to fix torrent downloading statuses. */
         void correctTorrentStatusesOnExit() const;

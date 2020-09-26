@@ -37,20 +37,20 @@ bool MainEventFilter::nativeEventFilter(const QByteArray &eventType, void *messa
     switch (msg->message) {
     case ::MSG_QMEDIA_UP:
         qDebug() << "IPC qMedia : qMedia started";
-        BitTorrent::TorrentExporter::instance()->setQMediaHwnd(
+        Export::TorrentExporter::instance()->setQMediaHwnd(
                     reinterpret_cast<HWND>(msg->wParam));
         return true;
     case ::MSG_QMEDIA_DOWN:
         qDebug() << "IPC qMedia : qMedia closed";
-        BitTorrent::TorrentExporter::instance()->setQMediaHwnd(nullptr);
+        Export::TorrentExporter::instance()->setQMediaHwnd(nullptr);
         return true;
     case ::MSG_QMD_APPLICATION_ACTIVE:
         qDebug() << "IPC qMedia : qMedia window activated";
-        BitTorrent::TorrentExporter::instance()->setQMediaWindowActive(true);
+        Export::TorrentExporter::instance()->setQMediaWindowActive(true);
         return true;
     case ::MSG_QMD_APPLICATION_DEACTIVE:
         qDebug() << "IPC qMedia : qMedia window deactivated";
-        BitTorrent::TorrentExporter::instance()->setQMediaWindowActive(false);
+        Export::TorrentExporter::instance()->setQMediaWindowActive(false);
         return true;
     }
 

@@ -23,7 +23,7 @@
 #include "commonglobal.h"
 #include "gui/mainwindow.h"
 
-using namespace BitTorrent;
+using namespace Export;
 
 // TODO fix _DLL, BOOST_ALL_DYN_LINK and clang analyze, also /MD vs /MT silverqx
 // https://www.boost.org/doc/libs/1_74_0/boost/system/config.hpp
@@ -157,7 +157,7 @@ namespace {
 
     /*! Filter out non previewable torrents. */
     const auto filterPreviewableTorrents =
-            [](const QVector<TorrentHandle *> &torrents)
+            [](const QVector<BitTorrent::TorrentHandle *> &torrents)
             -> TorrentExporter::TorrentHandleByInfoHashHash
     {
         TorrentExporter::TorrentHandleByInfoHashHash result;
@@ -239,8 +239,10 @@ namespace {
     };
 
     /*! Map qBittorent TorrentState to our custom TorrentStatus used in qMedia. */
-    inline const auto statusHash = []() -> const QHash<TorrentState, StatusProperties> &
+    inline const auto statusHash =
+            []() -> const QHash<BitTorrent::TorrentState, StatusProperties> &
     {
+        using TorrentState = BitTorrent::TorrentState;
         static const QHash<TorrentState, StatusProperties> cached
         {
             {TorrentState::Allocating,          statusAllocating},
@@ -286,13 +288,13 @@ TorrentExporter::TorrentExporter()
             this, &TorrentExporter::commitTorrentsTimerTimeout);
 
     // Connect events
-    connect(Session::instance(), &Session::torrentAdded,
+    connect(BitTorrent::Session::instance(), &BitTorrent::Session::torrentAdded,
             this, &TorrentExporter::handleTorrentAdded);
-    connect(Session::instance(), &Session::torrentDeleted,
+    connect(BitTorrent::Session::instance(), &BitTorrent::Session::torrentDeleted,
             this, &TorrentExporter::handleTorrentDeleted);
-    connect(Session::instance(), &Session::torrentsUpdated,
+    connect(BitTorrent::Session::instance(), &BitTorrent::Session::torrentsUpdated,
             this, &TorrentExporter::handleTorrentsUpdated);
-    connect(Session::instance(), &Session::torrentStorageMoveFinished,
+    connect(BitTorrent::Session::instance(), &BitTorrent::Session::torrentStorageMoveFinished,
             this, &TorrentExporter::handleTorrentStorageMoveFinished);
 
     // Find qMedia's main window HWND
@@ -329,7 +331,7 @@ TorrentExporter *TorrentExporter::instance()
     return m_instance;
 }
 
-void TorrentExporter::handleTorrentAdded(TorrentHandle *const torrent) const
+void TorrentExporter::handleTorrentAdded(BitTorrent::TorrentHandle *const torrent) const
 {
     if (!torrentContainsPreviewableFiles(torrent))
         return;
@@ -343,7 +345,7 @@ void TorrentExporter::handleTorrentAdded(TorrentHandle *const torrent) const
     m_dbCommitTimer->start(COMMIT_INTERVAL_BASE);
 }
 
-void TorrentExporter::handleTorrentDeleted(InfoHash infoHash) const
+void TorrentExporter::handleTorrentDeleted(BitTorrent::InfoHash infoHash) const
 {
 //    if (!QSqlDatabase::database().isOpen()) {
 //        qWarning() << "No active database connection, torrent additions / removes will not be handled";
@@ -398,7 +400,8 @@ void TorrentExporter::commitTorrentsTimerTimeout()
     ::PostMessage(m_qMediaHwnd, ::MSG_QBT_TORRENTS_ADDED, NULL, NULL);
 }
 
-void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torrents)
+void TorrentExporter::handleTorrentsUpdated(
+        const QVector<BitTorrent::TorrentHandle *> &torrents)
 {
     // Filter out non previewable torrents
     const auto previewableTorrents = filterPreviewableTorrents(torrents);
@@ -503,7 +506,7 @@ void TorrentExporter::connectDatabase() const
              << db.lastError().text();
 }
 
-void TorrentExporter::removeTorrentFromDb(const InfoHash &infoHash) const
+void TorrentExporter::removeTorrentFromDb(const BitTorrent::InfoHash &infoHash) const
 {
     QSqlQuery query;
     query.prepare(QStringLiteral("DELETE FROM torrents WHERE hash = :hash"));
@@ -543,7 +546,7 @@ void TorrentExporter::insertTorrentsToDb() const
     torrentsQuery.prepare(torrentsQueryString);
 
     // Prepare query bindings for torrents
-    const TorrentHandle *torrent;
+    const BitTorrent::TorrentHandle *torrent;
     auto itTorrents = m_torrentsToCommit->constBegin();
     while (itTorrents != m_torrentsToCommit->constEnd()) {
         torrent = itTorrents.value();
@@ -610,7 +613,7 @@ void TorrentExporter::removeExistingTorrents()
 
     // Remove duplicit torrents from commit hash
     while (query.next()) {
-        InfoHash hash(query.value(0).toString());
+        BitTorrent::InfoHash hash(query.value(0).toString());
         if (m_torrentsToCommit->contains(hash))
             m_torrentsToCommit->remove(hash);
     }
@@ -645,7 +648,7 @@ void TorrentExporter::insertPreviewableFilesToDb() const
     previewableFilesQuery.prepare(previewableFilesQueryString);
 
     // Prepare query bindings for torrents_previewable_files
-    const TorrentHandle *torrent;
+    const BitTorrent::TorrentHandle *torrent;
     QVector<qreal> filesProgress;
     auto itInsertedTorrents = insertedTorrents.constBegin();
     while (itInsertedTorrents != insertedTorrents.constEnd()) {
@@ -681,7 +684,8 @@ void TorrentExporter::insertPreviewableFilesToDb() const
 }
 
 TorrentExporter::TorrentHandleByIdHash
-TorrentExporter::selectTorrentIdsToCommitByHashes(const QList<InfoHash> &hashes) const
+TorrentExporter::selectTorrentIdsToCommitByHashes(
+        const QList<BitTorrent::InfoHash> &hashes) const
 {
     // Prepare binding placeholders
     auto placeholders = QStringLiteral("?, ").repeated(hashes.size());
@@ -712,7 +716,7 @@ TorrentExporter::selectTorrentIdsToCommitByHashes(const QList<InfoHash> &hashes)
     // Create new QHash of selected torrents
     TorrentHandleByIdHash torrents;
     while (query.next()) {
-        InfoHash hash(query.value("hash").toString());
+        BitTorrent::InfoHash hash(query.value("hash").toString());
         if (m_torrentsToCommit->contains(hash))
             torrents.insert(
                 query.value("id").toULongLong(),
@@ -754,9 +758,10 @@ TorrentExporter::mapTorrentHandleById(const TorrentHandleByInfoHashHash &torrent
     TorrentHandleByIdHash torrentsHash;
     while (query.next()) {
         // Find torrent handle by info hash
-        InfoHash hash(query.value(1).toString());
-        const auto itTorrentHandle = std::find_if(torrents.constBegin(), torrents.constEnd(),
-                                                  [&hash](const TorrentHandle *const torrent)
+        BitTorrent::InfoHash hash(query.value(1).toString());
+        const auto itTorrentHandle =
+                std::find_if(torrents.constBegin(), torrents.constEnd(),
+                             [&hash](const BitTorrent::TorrentHandle *const torrent)
         {
             return (torrent->hash() == hash) ? true : false;
         });
@@ -814,7 +819,7 @@ TorrentExporter::selectTorrentsByHandles(
     TorrentSqlRecordByIdHash torrentRecords;
     while (query.next()) {
         // Find torrent handle by info hash
-        InfoHash hash(query.value("hash").toString());
+        BitTorrent::InfoHash hash(query.value("hash").toString());
         const auto itTorrentHandle = std::find_if(torrents.constBegin(), torrents.constEnd(),
                                                   [&hash](auto *const torrent)
         {
@@ -883,7 +888,7 @@ TorrentExporter::selectTorrentsFilesByHandles(
     return torrentFilesInDb;
 }
 
-QHash<TorrentExporter::TorrentId, InfoHash>
+QHash<TorrentExporter::TorrentId, BitTorrent::InfoHash>
 TorrentExporter::selectTorrentsByStatuses(const QList<TorrentStatus> &statuses) const
 {
     // Prepare binding placeholders
@@ -911,9 +916,9 @@ TorrentExporter::selectTorrentsByStatuses(const QList<TorrentStatus> &statuses) 
     }
 
     // Create new QHash of selected torrents
-    QHash<TorrentId, InfoHash> torrents;
+    QHash<TorrentId, BitTorrent::InfoHash> torrents;
     while (query.next()) {
-        InfoHash hash(query.value("hash").toString());
+        BitTorrent::InfoHash hash(query.value("hash").toString());
         torrents.insert(query.value("id").toULongLong(), hash);
     }
 
@@ -1130,7 +1135,7 @@ void TorrentExporter::correctTorrentStatusesOnExit() const
 
     // Prepare bindings
     query.addBindValue(statusStalled.text);
-    QHashIterator<TorrentId, InfoHash> itTorrents(torrents);
+    QHashIterator<TorrentId, BitTorrent::InfoHash> itTorrents(torrents);
     while (itTorrents.hasNext()) {
         itTorrents.next();
         query.addBindValue(itTorrents.key());
@@ -1157,8 +1162,10 @@ void TorrentExporter::correctTorrentPeersOnExit() const
     }
 }
 
-void TorrentExporter::updateTorrentSaveDirInDb(const TorrentId torrentId, const QString &newPath,
-                                               const QString &torrentName) const
+void TorrentExporter::updateTorrentSaveDirInDb(
+        const TorrentId torrentId, const QString &newPath,
+        const QString &torrentName
+) const
 {
     qDebug("Updating savepath in db for torrent(ID%llu) : %s",
            torrentId, qUtf8Printable(torrentName));
@@ -1426,7 +1433,7 @@ bool TorrentExporter::pingDatabase(QSqlDatabase &db)
     return false;
 }
 
-uint BitTorrent::qHash(const BitTorrent::TorrentStatus &torrentStatus, const uint seed)
+uint Export::qHash(const TorrentStatus &torrentStatus, const uint seed)
 {
     return ::qHash(static_cast<int>(torrentStatus), seed);
 }

@@ -633,7 +633,7 @@ int Application::exec(const QStringList &params)
     }
 
 #ifdef Q_OS_WIN32
-    BitTorrent::TorrentExporter::initInstance();
+    Export::TorrentExporter::initInstance();
     installNativeEventFilter(new MainEventFilter());
 #endif
 
@@ -763,7 +763,7 @@ void Application::cleanup()
 #endif
 
     delete RSS::AutoDownloader::instance();
-    BitTorrent::TorrentExporter::freeInstance();
+    Export::TorrentExporter::freeInstance();
     delete RSS::Session::instance();
 
     ScanFoldersModel::freeInstance();
