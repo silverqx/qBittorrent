@@ -72,15 +72,32 @@ namespace BitTorrent
         typedef QHash<TorrentId, QSharedPointer<const TorrentFilesChangedHash>>
                 TorrentsFilesChangedHash;
 
+        static void showDbDisconnected();
+        static void showDbConnected();
+        /*! Check database connection and show warnings when the state changed. */
+        static bool pingDatabase(QSqlDatabase &db);
+
+        static TorrentExporter *m_instance;
+        static bool m_dbDisconnectedShowed;
+        static bool m_dbConnectedShowed;
+        static const int COMMIT_INTERVAL_BASE = 1000;
+        /*! Maximum interval between connect attempts to db. */
+        static const int COMMIT_INTERVAL_MAX  = 5000;
+
         TorrentExporter();
         ~TorrentExporter() override;
 
-        void connectToDb() const;
+        void connectDatabase() const;
         void removeTorrentFromDb(const InfoHash &infoHash) const;
         void insertTorrentsToDb() const;
         /*! Remove already existing torrents in DB from commit hash. */
         void removeExistingTorrents();
         void insertPreviewableFilesToDb() const;
+        inline void deferCommitTimerTimeout() const
+        {
+            m_dbCommitTimer->start(std::min(m_dbCommitTimer->interval() * 2,
+                                            COMMIT_INTERVAL_MAX));
+        }
         /*! Select inserted torrent ids by InfoHash-es for a torrents to commit and return
             torrent handles mapped by torrent ids. Used only during torrent added alert. */
         TorrentHandleByIdHash
@@ -137,8 +154,6 @@ namespace BitTorrent
         QPointer<QTimer> m_dbCommitTimer;
         HWND m_qMediaHwnd = nullptr;
         bool m_qMediaWindowActive = false;
-
-        static TorrentExporter *m_instance;
 
     private slots:
         void handleTorrentAdded(BitTorrent::TorrentHandle *const torrent) const;

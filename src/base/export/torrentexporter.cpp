@@ -1,6 +1,7 @@
 #include "torrentexporter.h"
 
 #include <QDebug>
+#include <QtSql/QSqlDriver>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
@@ -9,6 +10,8 @@
 #include <Psapi.h>
 
 #include <regex>
+
+#include "mysql.h"
 
 #include "app/application.h"
 #include "base/bittorrent/infohash.h"
@@ -29,8 +32,6 @@ using namespace BitTorrent;
 // May be relevant, do not know:
 // https://stackoverflow.com/questions/9527713/mixing-a-dll-boost-library-with-a-static-runtime-is-a-really-bad-idea
 namespace {
-    const int COMMIT_INTERVAL = 1000;
-
     TorrentExporter *l_torrentExporter = nullptr;
 
     BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM)
@@ -267,6 +268,8 @@ namespace {
 }
 
 TorrentExporter *TorrentExporter::m_instance = nullptr;
+bool TorrentExporter::m_dbDisconnectedShowed = false;
+bool TorrentExporter::m_dbConnectedShowed    = false;
 
 TorrentExporter::TorrentExporter()
     : m_torrentsToCommit(
@@ -275,10 +278,9 @@ TorrentExporter::TorrentExporter()
 {
     l_torrentExporter = this;
 
-    connectToDb();
+    connectDatabase();
 
     // Initialize the commit timer for added torrents
-    m_dbCommitTimer->setInterval(COMMIT_INTERVAL);
     m_dbCommitTimer->setSingleShot(true);
     connect(m_dbCommitTimer, &QTimer::timeout,
             this, &TorrentExporter::commitTorrentsTimerTimeout);
@@ -329,11 +331,6 @@ TorrentExporter *TorrentExporter::instance()
 
 void TorrentExporter::handleTorrentAdded(TorrentHandle *const torrent) const
 {
-    // TODO better handling, need to take into account also m_torrentsToCommit hash silverqx
-//    if (!QSqlDatabase::database().isOpen()) {
-//        qWarning() << "No active database connection, torrent additions / removes will not be handled";
-//        return;
-//    }
     if (!torrentContainsPreviewableFiles(torrent))
         return;
 
@@ -343,7 +340,7 @@ void TorrentExporter::handleTorrentAdded(TorrentHandle *const torrent) const
 
     m_torrentsToCommit->insert(torrent->hash(), torrent);
     // Start or Restart Timer
-    m_dbCommitTimer->start();
+    m_dbCommitTimer->start(COMMIT_INTERVAL_BASE);
 }
 
 void TorrentExporter::handleTorrentDeleted(InfoHash infoHash) const
@@ -361,6 +358,11 @@ void TorrentExporter::handleTorrentDeleted(InfoHash infoHash) const
 
 void TorrentExporter::commitTorrentsTimerTimeout()
 {
+    auto db = QSqlDatabase::database();
+    if (!pingDatabase(db))
+        // Try to commit later
+        return deferCommitTimerTimeout();
+
     // Remove existing torrents from commit hash
     removeExistingTorrents();
 
@@ -373,7 +375,7 @@ void TorrentExporter::commitTorrentsTimerTimeout()
     // it has its drawbacks.
     // If one of the insert queries fail, exception is throwed and data will be rollback-ed.
     // TODO use transaction with savepoints, like in a update strategy silverqx
-    auto db = QSqlDatabase::database();
+    // Use transaction to guarantee data integrity
     db.transaction();
     try {
         // Multi insert for torrents
@@ -398,11 +400,18 @@ void TorrentExporter::commitTorrentsTimerTimeout()
 
 void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torrents)
 {
-    // TODO DB connection check also here silverqx
     // Filter out non previewable torrents
     const auto previewableTorrents = filterPreviewableTorrents(torrents);
     // Nothing to update in DB
     if (previewableTorrents.size() == 0)
+        return;
+
+    // TODO record updated torrents, if db is disconnected, so we don't lose state silverqx
+
+    auto db = QSqlDatabase::database();
+    /* If the database disconnects, then the changed properties remain saved in the store
+       and will be processed later, when the database connects back. */
+    if (!pingDatabase(db))
         return;
 
     // Define hashes here and pass them to the fill method that fills them.
@@ -415,11 +424,10 @@ void TorrentExporter::handleTorrentsUpdated(const QVector<TorrentHandle *> &torr
                                        torrentsFilesChangedProperties))
         return;
 
-    auto db = QSqlDatabase::database();
     // Use transaction to guarantee data integrity
     db.transaction();
     try {
-        // Multi update of torrents and previewable files
+        // Update torrents and previewable files with changed properties
         updateTorrentsInDb(torrentsChangedProperties, torrentsFilesChangedProperties);
         db.commit();
     }  catch (const ExporterError &e) {
@@ -476,7 +484,7 @@ void TorrentExporter::handleTorrentStorageMoveFinished(
     ::IpcSendInfoHash(m_qMediaHwnd, ::MSG_QBT_TORRENT_MOVED, infoHash);
 }
 
-void TorrentExporter::connectToDb() const
+void TorrentExporter::connectDatabase() const
 {
     auto db = QSqlDatabase::addDatabase("QMYSQL");
     db.setHostName("127.0.0.1");
@@ -825,7 +833,8 @@ TorrentExporter::selectTorrentsByHandles(
 }
 
 TorrentExporter::TorrentFileSqlRecordByIdHash
-TorrentExporter::selectTorrentsFilesByHandles(const TorrentHandleByIdHash &torrentsUpdated) const
+TorrentExporter::selectTorrentsFilesByHandles(
+        const TorrentHandleByIdHash &torrentsUpdated) const
 {
     // Prepare binding placeholders
     auto placeholders = QStringLiteral("?, ").repeated(torrentsUpdated.size());
@@ -944,7 +953,9 @@ void TorrentExporter::updateTorrentsInDb(
                    "updateTorrentsInDb()",
                    query.toLatin1().constData());
         try {
+            // Torrents update
             updateTorrentInDb(torrentId, changedProperties);
+            // Previewable files update
             if (torrentsFilesChangedHash.contains(torrentId))
 #if LOG_CHANGED_TORRENTS
                 updatePreviewableFilesInDb(torrentsFilesChangedHash.value(torrentId), torrentId);
@@ -1343,6 +1354,76 @@ void TorrentExporter::traceTorrentFilesChangedProperties(
 
         torrentsFilesChangedProperties.insert(torrentId, torrentFilesChangedProperties);
     }
+}
+
+void TorrentExporter::showDbDisconnected()
+{
+    if (m_dbDisconnectedShowed)
+        return;
+    m_dbDisconnectedShowed = true;
+
+    // Reset connected flag
+    m_dbConnectedShowed = false;
+
+    qWarning() << "No active database connection, torrent additions / removes will "
+                  "not be commited";
+}
+
+void TorrentExporter::showDbConnected()
+{
+    if (m_dbConnectedShowed)
+        return;
+    m_dbConnectedShowed = true;
+
+    // Reset disconnected flag
+    m_dbDisconnectedShowed = false;
+
+    qInfo() << "Database connected";
+}
+
+bool TorrentExporter::pingDatabase(QSqlDatabase &db)
+{
+    const auto getMysqlHandle = [&db]() -> MYSQL *
+    {
+        auto driverHandle = db.driver()->handle();
+        if (qstrcmp(driverHandle.typeName(), "MYSQL*") == 0)
+            return *static_cast<MYSQL **>(driverHandle.data());
+        return nullptr;
+    };
+    const auto mysqlPing = [getMysqlHandle]()
+    {
+        auto mysqlHandle = getMysqlHandle();
+        if (mysqlHandle == nullptr)
+            return false;
+        auto ping = mysql_ping(mysqlHandle);
+        auto errNo = mysql_errno(mysqlHandle);
+        /* So strange logic, because I want interpret CR_COMMANDS_OUT_OF_SYNC errno as
+           successful ping. */
+        if ((ping != 0) && (errNo == CR_COMMANDS_OUT_OF_SYNC)) {
+            // TODO log to file, how often this happen silverqx
+            qWarning("mysql_ping() returned : CR_COMMANDS_OUT_OF_SYNC(%ud)", errNo);
+            return true;
+        }
+        else if (ping == 0)
+            return true;
+        else if (ping != 0)
+            return false;
+        else {
+            qWarning() << "Unknown behavior during mysql_ping(), this should never happen :/";
+            return false;
+        }
+    };
+
+    if (db.isOpen() && mysqlPing()) {
+        showDbConnected();
+        return true;
+    }
+
+    showDbDisconnected();
+    // Database connection have to be closed manually
+    // isOpen() check is called in MySQL driver
+    db.close();
+    return false;
 }
 
 uint BitTorrent::qHash(const BitTorrent::TorrentStatus &torrentStatus, const uint seed)
