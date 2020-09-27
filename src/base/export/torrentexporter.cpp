@@ -639,7 +639,7 @@ void TorrentExporter::insertPreviewableFilesToDb() const
     placeholders.chop(2);
 
     const auto previewableFilesQueryString =
-        QStringLiteral("INSERT INTO torrents_previewable_files "
+        QStringLiteral("INSERT INTO torrent_previewable_files "
                        "(torrent_id, file_index, filepath, size, progress) "
                        "VALUES %1")
         .arg(placeholders);
@@ -647,7 +647,7 @@ void TorrentExporter::insertPreviewableFilesToDb() const
     QSqlQuery previewableFilesQuery;
     previewableFilesQuery.prepare(previewableFilesQueryString);
 
-    // Prepare query bindings for torrents_previewable_files
+    // Prepare query bindings for torrent_previewable_files
     const BitTorrent::TorrentHandle *torrent;
     QVector<qreal> filesProgress;
     auto itInsertedTorrents = insertedTorrents.constBegin();
@@ -847,7 +847,7 @@ TorrentExporter::selectTorrentsFilesByHandles(
     placeholders.chop(2);
     const auto queryString =
             QStringLiteral("SELECT id, torrent_id, file_index, filepath, size, progress "
-                           "FROM torrents_previewable_files "
+                           "FROM torrent_previewable_files "
                            "WHERE torrent_id IN (%1)")
             .arg(placeholders);
 
@@ -1084,7 +1084,7 @@ void TorrentExporter::updatePreviewableFilesInDb(
 
         // Create query
         const auto updateTorrentQuery =
-                QStringLiteral("UPDATE torrents_previewable_files SET %1 "
+                QStringLiteral("UPDATE torrent_previewable_files SET %1 "
                                "WHERE id = ?")
                 .arg(updateSetBindings);
 
