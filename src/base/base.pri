@@ -28,8 +28,23 @@ HEADERS += \
     $$PWD/bittorrent/tracker.h \
     $$PWD/bittorrent/trackerentry.h \
     $$PWD/exceptions.h \
+    $$PWD/export/exportererror.h \
+    $$PWD/export/exutils.h \
+    $$PWD/export/model/torrent.h \
+    $$PWD/export/presenter/firstid.h \
+    $$PWD/export/presenter/torrentfilesqlrecordbytorrentid.h \
+    $$PWD/export/presenter/torrenthandleandsqlrecondbyiddata.h \
+    $$PWD/export/presenter/torrenthandlebyinfohashdata.h \
+    $$PWD/export/presenter/torrentidbyinfohash.h \
+    $$PWD/export/repository/torrentpreviewablefilesrepository.h \
+    $$PWD/export/repository/torrentsrepository.h \
+    $$PWD/export/service/storagemovefinishedservice.h \
+    $$PWD/export/service/torrentaddedservice.h \
+    $$PWD/export/service/torrentupdatedservice.h \
     $$PWD/export/torrentexporter.h \
     $$PWD/export/torrentexporterconfig.h \
+    $$PWD/export/torrentstatus.h \
+    $$PWD/export/types.h \
     $$PWD/filesystemwatcher.h \
     $$PWD/global.h \
     $$PWD/http/connection.h \
@@ -110,7 +125,19 @@ SOURCES += \
     $$PWD/bittorrent/tracker.cpp \
     $$PWD/bittorrent/trackerentry.cpp \
     $$PWD/exceptions.cpp \
+    $$PWD/export/exutils.cpp \
+    $$PWD/export/presenter/firstid.cpp \
+    $$PWD/export/presenter/torrentfilesqlrecordbytorrentid.cpp \
+    $$PWD/export/presenter/torrenthandleandsqlrecondbyiddata.cpp \
+    $$PWD/export/presenter/torrenthandlebyinfohashdata.cpp \
+    $$PWD/export/presenter/torrentidbyinfohash.cpp \
+    $$PWD/export/repository/torrentpreviewablefilesrepository.cpp \
+    $$PWD/export/repository/torrentsrepository.cpp \
+    $$PWD/export/service/storagemovefinishedservice.cpp \
+    $$PWD/export/service/torrentaddedservice.cpp \
+    $$PWD/export/service/torrentupdatedservice.cpp \
     $$PWD/export/torrentexporter.cpp \
+    $$PWD/export/torrentstatus.cpp \
     $$PWD/filesystemwatcher.cpp \
     $$PWD/http/connection.cpp \
     $$PWD/http/httperror.cpp \
