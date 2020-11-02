@@ -12,8 +12,14 @@ namespace BitTorrent
 
 namespace Export
 {
+
+namespace Orm
+{
     class EntityManager;
-    class StatusTextHash;
+}
+class StatusTextHash;
+
+    using EntityManager = Orm::EntityManager;
 
     class TorrentsRepository final : public BaseRepository
     {

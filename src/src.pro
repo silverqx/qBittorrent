@@ -47,6 +47,7 @@ stacktrace {
 DEFINES += PROJECT_QBITTORRENT
 # Under which namespace to export symbols in qMangoCommon project
 DEFINES += MANGO_COMMON_NAMESPACE=Export
+DEFINES += MANGO_DEBUG_SQL
 
 CONFIG(debug, debug|release): message(Project is built in DEBUG mode.)
 CONFIG(release, debug|release): message(Project is built in RELEASE mode.)

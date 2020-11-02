@@ -7,7 +7,12 @@
 
 namespace Export
 {
+
+namespace Orm
+{
     class EntityManager;
+}
+    using EntityManager = Orm::EntityManager;
 
     class TorrentPreviewableFilesRepository final : public BaseRepository
     {
