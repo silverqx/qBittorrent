@@ -33,6 +33,7 @@
 #include <QVariant>
 #include <QMap>
 #include <QVector>
+#include <QHash>
 #include <QStringList>
 #include <QDir>
 #include <QPointer>
